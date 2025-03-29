@@ -1,0 +1,11 @@
+torch
+torchvision
+tqdm
+opencv-python
+pandas
+numpy
+matplotlib
+jupyter
+h5py
+pyyaml
+pygame

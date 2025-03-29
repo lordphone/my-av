@@ -1,0 +1,8 @@
+# virtual environments
+venvs/
+
+# data
+data/
+
+# CARLA
+carla/

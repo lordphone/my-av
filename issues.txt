@@ -1,0 +1,8 @@
+during setting up carla - step make PythonAPI, cant find include header files in the venv:
+# Create the target directory
+mkdir -p /home/lordphone/my-av/venvs/carla-venv/include/python3.10
+
+# Link all files (but this won't handle subdirectories)
+for file in /usr/include/python3.8/*; do
+    ln -s "$file" /home/lordphone/my-av/venvs/carla-venv/include/python3.8/
+done

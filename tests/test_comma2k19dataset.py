@@ -18,8 +18,9 @@ def test_dataset():
         sample = dataset[0]
         print("First sample loaded successfully:")
         print(f"Image: {sample['image']}")
-        print(f"Log Data: {sample['log_data']}")
-        print(f"Position Data: {sample['position_data']}")
+        print(f"Video Path: {sample['video_path']}")
+        print(f"Log Path: {sample['log_path']}")
+        print(f"Pose Path: {sample['pose_path']}")
         print(f"Metadata: {sample['metadata']}")
     else:
         print("No samples found in the dataset.")

@@ -1,11 +1,14 @@
 # virtual environments
-venvs/
+/venvs
 
 # data
-data/
+/data
 
 # CARLA
-carla/
+/carla
+
+# Python cache
+__pycache__/
 
 # secrets
 .secrets

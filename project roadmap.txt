@@ -1,0 +1,13 @@
+learn how to do machine learning on comma2k19
+    familiarize with tools provided
+    preform simple path prediction
+    rely on llm to help train a model with inputs and outputs
+    
+
+implement my own model in the carla simulator
+    hook up the inputs and outputs to the car in the simulator
+    test drive it on highways
+
+implement my own model and hook it up with openpilot tools
+    familiarize with openpilot
+    extensive testing before taking it on the road

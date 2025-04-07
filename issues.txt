@@ -6,3 +6,10 @@ mkdir -p /home/lordphone/my-av/venvs/carla-venv/include/python3.10
 for file in /usr/include/python3.8/*; do
     ln -s "$file" /home/lordphone/my-av/venvs/carla-venv/include/python3.8/
 done
+
+comma2k19 has folder mismanagment
+
+for old openpilot version in comma2k19, when setting up tools, there are dependency issues, need to downgrade dependencies and add them to a hold list.
+HOWEVER, by doing this, other packages break? I'm not sure how to use openpilot tools from here. maybe skip it.
+
+hevc videos aren't compatible with ffmpeg's seeking function. had to convert to mp4 files.

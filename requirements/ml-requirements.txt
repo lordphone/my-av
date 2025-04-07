@@ -9,3 +9,6 @@ jupyter
 h5py
 pyyaml
 pygame
+
+# for video processing
+ffmpeg

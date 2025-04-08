@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.utils.framereader import FrameReader
 
 def test_framereader():
-    video_path = "/home/lordphone/my-av/tests/video.mp4"
+    video_path = "/home/lordphone/my-av/tests/data/video.mp4"
     
     try:
         # Initialize the FrameReader

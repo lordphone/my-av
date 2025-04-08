@@ -1,14 +1,2 @@
-torch
-torchvision
-tqdm
-opencv-python
-pandas
-numpy
-matplotlib
-jupyter
-h5py
-pyyaml
-pygame
-
-# for video processing
-ffmpeg
+ffmpeg-python==0.2.0
+numpy==1.24.4

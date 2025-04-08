@@ -1,3 +1,6 @@
+# Ignore egg-info folder
+my_av.egg-info/
+
 # virtual environments
 /venvs
 

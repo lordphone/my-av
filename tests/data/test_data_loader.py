@@ -1,6 +1,6 @@
 import unittest
 from src.data.data_loader import create_data_loader
-from comma2k19dataset import Comma2k19Dataset
+from src.data.comma2k19dataset import Comma2k19Dataset
 from torch.utils.data import DataLoader
 
 class TestDataLoader(unittest.TestCase):

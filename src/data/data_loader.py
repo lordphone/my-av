@@ -1,7 +1,7 @@
 # data_loader.py
 
 from torch.utils.data import DataLoader
-from comma2k19dataset import Comma2k19Dataset
+from src.data.comma2k19dataset import Comma2k19Dataset
 
 def create_data_loader(data_path, batch_size=8, shuffle=True, num_workers=4):
     """

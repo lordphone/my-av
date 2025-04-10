@@ -13,3 +13,5 @@ for old openpilot version in comma2k19, when setting up tools, there are depende
 HOWEVER, by doing this, other packages break? I'm not sure how to use openpilot tools from here. maybe skip it.
 
 hevc videos aren't compatible with ffmpeg's seeking function. had to convert to mp4 files.
+
+installing the right version for cuda/nvidia drivers is important. deb > local

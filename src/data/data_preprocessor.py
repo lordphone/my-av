@@ -46,8 +46,8 @@ class DataPreprocessor:
         # Read frames and apply transformations
         frames = []
         for frame in frame_reader:
-            if len(frames) > 5:
-                break
+            # if len(frames) > 5:
+            #     break
             transformed_frame = self.transform(frame)
             frames.append(transformed_frame)
             print(f"Processed frame shape: {transformed_frame.shape}")

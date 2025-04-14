@@ -15,3 +15,5 @@ HOWEVER, by doing this, other packages break? I'm not sure how to use openpilot 
 hevc videos aren't compatible with ffmpeg's seeking function. had to convert to mp4 files.
 
 installing the right version for cuda/nvidia drivers is important. deb > local
+
+super slow frame reading. probably a cuda or implementation problem.

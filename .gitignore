@@ -10,8 +10,9 @@ my_av.egg-info/
 # CARLA
 /carla
 
-# Python cache
+# Python Related
 __pycache__/
+.pytest_cache/
 
 # secrets
 .secrets

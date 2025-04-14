@@ -18,7 +18,7 @@ class TestFrameReader(unittest.TestCase):
             self.assertGreater(self.reader.fps, 0)
             
             # Read a few frames and check their shapes
-            for frame_idx in [0, 10, 20]:
+            for frame_idx in [0, 50, 100]:
                 if frame_idx < self.reader.num_frames:
                     frame = self.reader.get(frame_idx)
                     self.assertEqual(len(frame.shape), 3)
@@ -77,29 +77,40 @@ class TestFrameReader(unittest.TestCase):
     
     def test_iteration_completeness(self):
         """Test that iteration covers all frames in the video."""
-        if self.reader.num_frames > 100:
-            self.skipTest("Skipping full iteration test for long videos")
-            
         frame_count = sum(1 for _ in self.reader)
         self.assertEqual(frame_count, self.reader.num_frames)
 
-    def test_speed_and_frame_values(self):
-        """Test the speed of the FrameReader and print numpy values for each frame."""
-        import time
-
-        start_time = time.time()
-        frame_count = 0
-
-        for frame in self.reader:
-            # Print numpy values for the current frame
-            print(f"Frame {frame_count}: {frame.flatten()[:10]}...")  # Print first 10 pixel values
-            frame_count += 1
-
-        elapsed_time = time.time() - start_time
-        print(f"Processed {frame_count} frames in {elapsed_time:.2f} seconds.")
-
-        # Ensure all frames were processed
-        self.assertEqual(frame_count, self.reader.num_frames)
+    def test_get_frames_method(self):
+        """Test the get_frames method for retrieving multiple consecutive frames."""
+        try:
+            # Test retrieving a small number of frames
+            start_idx = 10
+            num_frames = 25
+            frames = self.reader.get_frames(start_idx, num_frames)
+            
+            # Verify the shape of the returned frames
+            self.assertEqual(frames.shape, (num_frames, self.reader.height, self.reader.width, 3))
+            
+            # Verify that the frames are not empty or all zeros
+            self.assertGreater(frames.sum(), 0)
+            
+            # Verify that the frames are consecutive
+            for i in range(num_frames - 1):
+                self.assertFalse((frames[i] == frames[i + 1]).all())
+            
+            # Test retrieving frames near the end of the video
+            start_idx = max(0, self.reader.num_frames - 10)
+            num_frames = 10
+            frames = self.reader.get_frames(start_idx, num_frames)
+            
+            # Verify the shape of the returned frames
+            expected_num_frames = min(num_frames, self.reader.num_frames - start_idx)
+            self.assertEqual(frames.shape, (expected_num_frames, self.reader.height, self.reader.width, 3))
+            
+            # Verify that the frames are not empty or all zeros
+            self.assertGreater(frames.sum(), 0)
+        except Exception as e:
+            self.fail(f"get_frames method test failed: {e}")
 
 
 if __name__ == "__main__":

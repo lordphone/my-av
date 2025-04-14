@@ -1,5 +1,3 @@
-# tool to read frames from the comma2k19 driving video. Videos are in HEVC format, 20 frames per second.
-
 import ffmpeg
 import numpy as np
 import os
@@ -7,91 +5,178 @@ import subprocess
 
 class FrameReader:
     """
-    Simple frame reader class to read frames from a video file.
-    Supports iteration over all frames in the video.
-    """
-    def __init__(self, video_path):
-        self.video_path = video_path
+    Optimized frame reader for comma2k19 driving videos.
 
+    Compared to my first basic frame reader, improvements include:
+    - Checking for CUDA availability and using it for hardware acceleration if possible.
+    - Using ffmpeg to read frames in batches instead of one at a time.
+    """
+    def __init__(self, video_path, use_cuda=True, batch_size=50):
+        self.video_path = video_path
+        self.use_cuda = use_cuda and self._is_cuda_available()
+        self.batch_frames = None
+        self.batch_start_idx = -1
+        self.batch_size = batch_size  # Number of frames to process in one batch
+        
         # Check that video exists
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file {video_path} does not exist.")
+            
+        # Get video metadata
         probe = ffmpeg.probe(video_path)
+        video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
         
-        # Gather video metadata
-        self.width = probe['streams'][0]['width']
-        self.height = probe['streams'][0]['height']
-        self.fps = eval(probe['streams'][0]['r_frame_rate'])
+        if video_stream is None:
+            raise ValueError(f"No video stream found in {video_path}")
+            
+        self.width = int(video_stream['width'])
+        self.height = int(video_stream['height'])
+        self.fps = eval(video_stream['r_frame_rate'])
         
         # Get total number of frames
-        self.num_frames = int(float(probe['streams'][0]['nb_frames']) if 'nb_frames' in probe['streams'][0] else 
-                             float(probe['streams'][0]['duration']) * self.fps)
+        self.num_frames = int(float(video_stream['nb_frames']) if 'nb_frames' in video_stream else 
+                             float(video_stream['duration']) * self.fps)
         
-        # Initialize ffmpeg process and iteration state
-        self.ffmpeg_process = None
+        # Initialize iteration state
         self._current_frame = 0
-
-    def get(self, frame_idx, pix_fmt='rgb24'):
+    
+    def _is_cuda_available(self):
+        """Check if CUDA is available for hardware acceleration"""
+        try:
+            # Try running a simple ffmpeg command with CUDA
+            subprocess.run(
+                ["ffmpeg", "-hwaccel", "cuda", "-hwaccel_device", "0", "-f", "lavfi", 
+                 "-i", "nullsrc", "-t", "1", "-f", "null", "-"],
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL,
+                check=True
+            )
+            return True
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
+    
+    def _load_batch(self, start_idx):
+        """Load a batch of frames starting from start_idx"""
+        batch_size = min(self.batch_size, self.num_frames - start_idx)
+        if batch_size <= 0:
+            return None
+            
+        # Set up ffmpeg command with appropriate hardware acceleration
+        input_args = {'ss': start_idx / self.fps}
+        if self.use_cuda:
+            input_args.update({'hwaccel': 'cuda', 'hwaccel_device': '0'})
+            
+        # Process a batch of frames at once
+        out, _ = (
+            ffmpeg
+            .input(self.video_path, **input_args)
+            .output('pipe:', format='rawvideo', pix_fmt='rgb24', vframes=batch_size)
+            .run(capture_stdout=True, quiet=True)
+        )
+        
+        if not out:
+            return None
+            
+        # Reshape into individual frames
+        frames = np.frombuffer(out, np.uint8).reshape([batch_size, self.height, self.width, 3])
+        return frames
+    
+    def get(self, frame_idx):
         """
-        Get a frame from the video file, specified by the frame index.
+        Get a frame from the video file using the frame index.
 
         Args:
             frame_idx (int): The index of the frame to retrieve.
-            pix_fmt (str): The pixel format to use. Default is 'rgb24'.
 
         Returns:
             np.ndarray: The requested frame as a numpy array.
         """
-        if self.ffmpeg_process is not None:
-            self.ffmpeg_process.kill()
-
-        # Start ffmpeg process
-        out, _ = (
-            ffmpeg
-            .input(self.video_path, ss=frame_idx / self.fps, hwaccel='cuda', hwaccel_device='0')
-            .output('pipe:', format='rawvideo', pix_fmt=pix_fmt,  vframes=1)
-            .run(capture_stdout=True, quiet=True)
-        )
-
-        if not out:
+        if not 0 <= frame_idx < self.num_frames:
+            raise IndexError(f"Frame index {frame_idx} out of range [0, {self.num_frames-1}]")
+        
+        # Check if the requested frame is in the current batch
+        if (self.batch_frames is not None and 
+            self.batch_start_idx <= frame_idx < self.batch_start_idx + len(self.batch_frames)):
+            return self.batch_frames[frame_idx - self.batch_start_idx]
+        
+        # If not, load a new batch centered around the requested frame
+        batch_start = (frame_idx // self.batch_size) * self.batch_size
+        self.batch_frames = self._load_batch(batch_start)
+        self.batch_start_idx = batch_start
+        
+        if self.batch_frames is None:
             raise ValueError(f"Failed to extract frame {frame_idx} from video {self.video_path}")
+            
+        # Return the requested frame from the new batch
+        return self.batch_frames[frame_idx - self.batch_start_idx]
+    
+    def get_frames(self, start_idx, num_frames):
+        """
+        Get multiple consecutive frames starting from start_idx.
+        Much more efficient than calling get() repeatedly.
 
-        channels = 3 if pix_fmt == 'rgb24' else 1
-        frame = (
-            np.frombuffer(out, np.uint8)
-            .reshape([self.height, self.width, channels])
-        )
-        return frame
+        Args:
+            start_idx (int): Starting frame index
+            num_frames (int): Number of frames to retrieve
 
+        Returns:
+            np.ndarray: Array of frames with shape [num_frames, height, width, 3]
+        """
+        if not 0 <= start_idx < self.num_frames:
+            raise IndexError(f"Start index {start_idx} out of range [0, {self.num_frames-1}]")
+            
+        num_frames = min(num_frames, self.num_frames - start_idx)
+        
+        # If all frames can be loaded in a single batch, do that
+        if num_frames <= self.batch_size:
+            batch = self._load_batch(start_idx)
+            if batch is None:
+                raise ValueError(f"Failed to extract frames starting at {start_idx}")
+            return batch[:num_frames]
+        
+        # Otherwise, load in multiple batches
+        frames = np.zeros((num_frames, self.height, self.width, 3), dtype=np.uint8)
+        for i in range(0, num_frames, self.batch_size):
+            batch_size = min(self.batch_size, num_frames - i)
+            batch = self._load_batch(start_idx + i)
+            if batch is None:
+                raise ValueError(f"Failed to extract frames starting at {start_idx + i}")
+            frames[i:i+batch_size] = batch[:batch_size]
+            
+        return frames
+    
     def __iter__(self):
-        """
-        Make the FrameReader iterable by returning itself as an iterator.
-        """
+        """Make the FrameReader iterable"""
         self._current_frame = 0
         return self
     
     def __next__(self):
-        """
-        Returns the next frame in the video.
-        
-        Raises:
-            StopIteration: When there are no more frames to read.
-        """
+        """Returns the next frame in the video"""
         if self._current_frame >= self.num_frames:
             raise StopIteration
             
-        frame = self.get(self._current_frame)
+        # For sequential access, we can optimize by prefetching batches
+        if (self.batch_frames is None or 
+            self._current_frame >= self.batch_start_idx + len(self.batch_frames) or 
+            self._current_frame < self.batch_start_idx):
+            
+            # Get a new batch starting at the current frame index
+            batch_start = (self._current_frame // self.batch_size) * self.batch_size
+            self.batch_frames = self._load_batch(batch_start)
+            self.batch_start_idx = batch_start
+            
+            if self.batch_frames is None:
+                raise ValueError(f"Failed to extract frame {self._current_frame}")
+        
+        # Get the frame from the current batch
+        frame = self.batch_frames[self._current_frame - self.batch_start_idx]
         self._current_frame += 1
         return frame
     
     def __len__(self):
-        """
-        Returns the total number of frames in the video.
-        """
+        """Returns the total number of frames in the video"""
         return self.num_frames
     
     def reset(self):
-        """
-        Reset the iterator to the beginning of the video.
-        """
+        """Reset the iterator to the beginning of the video"""
         self._current_frame = 0

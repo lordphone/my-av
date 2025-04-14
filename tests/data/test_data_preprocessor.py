@@ -45,15 +45,19 @@ class TestDataPreprocessor(unittest.TestCase):
         self.assertEqual(self.frames.shape[0], len(self.steering), "Number of frames should match length of steering data")
 
     def test_normalization(self):
-        """Test that frames are properly normalized"""
-        # Check normalization range (should be between -1 and 1 due to the normalization)
-        self.assertTrue((self.frames >= -1.0).all() and (self.frames <= 1.0).all(),
-                         "Normalized frame values should be in the range [-1, 1]")
+        """Test that the frames are normalized correctly"""
+        # Check normalization
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
         
-        # Check that the data uses the full range (not just clustered around 0)
-        # This is a heuristic check that normalization happened
-        self.assertTrue(self.frames.min() < -0.5 or self.frames.max() > 0.5,
-                        "Frame values should use a substantial portion of the normalization range")
+        # Denormalize the frames to check if values are within the expected range
+        denormalized_frames = self.frames * std + mean
+        
+        # Check that pixel values are within [0, 1] range
+        self.assertTrue((denormalized_frames >= 0).all(), 
+                "Denormalized frames should have values >= 0")
+        self.assertTrue((denormalized_frames <= 1).all(), 
+                "Denormalized frames should have values <= 1")
 
     def test_time_alignment(self):
         """Test that steering and speed data are properly time-aligned with frames"""

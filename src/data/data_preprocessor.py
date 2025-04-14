@@ -14,8 +14,10 @@ class DataPreprocessor:
             transforms.ToPILImage(),
             transforms.Resize(img_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-            # TODO: get the correct normalize values
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],  # ImageNet means
+                std=[0.229, 0.224, 0.225]     # ImageNet stds
+            )
         ])
 
     def preprocess_segment(self, segment_data):
@@ -46,13 +48,9 @@ class DataPreprocessor:
         # Read frames and apply transformations
         frames = []
         for frame in frame_reader:
-            # if len(frames) > 5:
-            #     break
             transformed_frame = self.transform(frame)
             frames.append(transformed_frame)
-            print(f"Processed frame shape: {transformed_frame.shape}")
-            print(f"Total frames processed: {len(frames)}")
-
+            
         # Interpolate steering and speed data to match frames
         steering_for_frames = np.interp(frame_times, steering_times, steering_values)
         speed_for_frames = np.interp(frame_times, speed_times, speed_values)

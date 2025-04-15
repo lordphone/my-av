@@ -61,6 +61,20 @@ class DataPreprocessor:
         # Convert steering and speed data to tensors
         steering_tensor = torch.tensor(steering_for_frames, dtype=torch.float32)
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
+
+        # Make all the batch length to be 1200
+        batch_length = 1200
+        if len(frames_tensor) < batch_length:
+            frames_tensor = torch.cat([frames_tensor, torch.zeros(batch_length - len(frames_tensor), *frames_tensor.shape[1:])])
+            steering_tensor = torch.cat([steering_tensor, torch.zeros(batch_length - len(steering_tensor))])
+            speed_tensor = torch.cat([speed_tensor, torch.zeros(batch_length - len(speed_tensor))])
+        else:
+            frames_tensor = frames_tensor[:batch_length]
+            steering_tensor = steering_tensor[:batch_length]
+            speed_tensor = speed_tensor[:batch_length]
+        
+        # Print the size of the frames tensor
+        # print(f"Frames tensor size: {frames_tensor.size()}")
         
         # Return processed tensor data
         return {

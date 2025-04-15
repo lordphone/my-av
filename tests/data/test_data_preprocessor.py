@@ -98,6 +98,12 @@ class TestDataPreprocessor(unittest.TestCase):
                          "Steering tensor should not contain Inf values")
         self.assertFalse(torch.isinf(self.speed).any(), 
                          "Speed tensor should not contain Inf values")
+        
+    def test_batch_size(self):
+        """Test that the batch size is correct"""
+        # Check that the batch size is 1200
+        self.assertEqual(self.frames.shape[0], 1200, 
+                         "Batch size should be 1 for single segment processing")
 
 if __name__ == "__main__":
     unittest.main()

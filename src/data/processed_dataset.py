@@ -15,13 +15,8 @@ class ProcessedDataset(Dataset):
         return len(self.base_dataset)
         
     def __getitem__(self, idx):
-        # if idx in self.cache:
-        #     return self.cache[idx]
-            
         segment_data = self.base_dataset[idx]
-        processed_data = self.preprocessor.preprocess_segment(segment_data)
-        
-        # if self.cache_data and processed_data is not None:
-        #     self.cache[idx] = processed_data
-            
-        return processed_data
+        windowed_data = self.preprocessor.preprocess_segment(segment_data)
+
+        # Flatten the list of windowed data to access individual windows
+        return windowed_data[idx % len(windowed_data)]

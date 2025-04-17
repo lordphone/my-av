@@ -20,8 +20,8 @@ class DataPreprocessor:
             )
         ])
 
-    def preprocess_segment(self, segment_data):
-        """Preprocess a single segment of data."""
+    def preprocess_segment(self, segment_data, window_size=10, stride=10):
+        """Preprocess a single segment of data with a sliding window."""
 
         # Get paths from the segment data
         video_path = segment_data['video_path']
@@ -39,7 +39,7 @@ class DataPreprocessor:
         speed_times = np.load(os.path.join(log_path, 'CAN/speed/t'))
         speed_values = np.load(os.path.join(log_path, 'CAN/speed/value'))
 
-        # Squeeze speed values since for some reason they are 2D
+        # Squeeze speed values since for some reason they are 3D
         speed_values = np.squeeze(speed_values)
 
         # Initialize frame reader
@@ -50,7 +50,7 @@ class DataPreprocessor:
         for frame in frame_reader:
             transformed_frame = self.transform(frame)
             frames.append(transformed_frame)
-            
+
         # Interpolate steering and speed data to match frames
         steering_for_frames = np.interp(frame_times, steering_times, steering_values)
         speed_for_frames = np.interp(frame_times, speed_times, speed_values)
@@ -62,23 +62,22 @@ class DataPreprocessor:
         steering_tensor = torch.tensor(steering_for_frames, dtype=torch.float32)
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
 
-        # Make all the batch length to be 1200
-        batch_length = 1200
-        if len(frames_tensor) < batch_length:
-            frames_tensor = torch.cat([frames_tensor, torch.zeros(batch_length - len(frames_tensor), *frames_tensor.shape[1:])])
-            steering_tensor = torch.cat([steering_tensor, torch.zeros(batch_length - len(steering_tensor))])
-            speed_tensor = torch.cat([speed_tensor, torch.zeros(batch_length - len(speed_tensor))])
-        else:
-            frames_tensor = frames_tensor[:batch_length]
-            steering_tensor = steering_tensor[:batch_length]
-            speed_tensor = speed_tensor[:batch_length]
-        
-        # Print the size of the frames tensor
-        # print(f"Frames tensor size: {frames_tensor.size()}")
-        
-        # Return processed tensor data
-        return {
-            'frames': frames_tensor,
-            'steering': steering_tensor,
-            'speed': speed_tensor,
-        }
+        # Create sliding windows
+        num_windows = (len(frames_tensor) - window_size) // stride + 1
+        windowed_data = []
+
+        for i in range(num_windows):
+            start_idx = i * stride
+            end_idx = start_idx + window_size
+
+            window_frames = frames_tensor[start_idx:end_idx]
+            window_steering = steering_tensor[start_idx:end_idx]
+            window_speed = speed_tensor[start_idx:end_idx]
+
+            windowed_data.append({
+                'frames': window_frames,
+                'steering': window_steering,
+                'speed': window_speed,
+            })
+
+        return windowed_data

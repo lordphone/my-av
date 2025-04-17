@@ -1,5 +1,6 @@
 # model.py
 # Defines the neural network architecture
+# A 3D CNN model for processing video data
 
 import torch
 import torch.nn as nn
@@ -24,13 +25,12 @@ class Model(nn.Module):
             # More layers as needed
         )
         
-        # Calculate the size after convolutions
-        # This would depend on your input size and architecture
-        conv_output_size = 128 * 150 * 10 * 20  # Adjust these values based on your model
+        # Dynamically calculate the size after convolutions
+        self._conv_output_size = None
         
         # Fully connected layers
         self.fc = nn.Sequential(
-            nn.Linear(conv_output_size, 512),
+            nn.Linear(self.get_conv_output_size((3, 10, 160, 320)), 512),
             nn.ReLU(),
             nn.Dropout(0.5)
         )
@@ -38,7 +38,15 @@ class Model(nn.Module):
         # Output heads
         self.steering_head = nn.Linear(512, 1)
         self.speed_head = nn.Linear(512, 1)
-        
+
+    def get_conv_output_size(self, input_shape):
+        if self._conv_output_size is None:
+            with torch.no_grad():
+                dummy_input = torch.zeros(1, *input_shape)  # Batch size of 1
+                output = self.conv3d(dummy_input)
+                self._conv_output_size = int(torch.prod(torch.tensor(output.shape[1:])))
+        return self._conv_output_size
+
     def forward(self, x):
         # x shape: [batch_size, sequence_length, channels, height, width]
         # Rearrange to [batch_size, channels, sequence_length, height, width]

@@ -17,3 +17,6 @@ hevc videos aren't compatible with ffmpeg's seeking function. had to convert to 
 installing the right version for cuda/nvidia drivers is important. deb > local
 
 super slow frame reading. probably a cuda or implementation problem.
+implemented batch frame reading to combat this^
+
+a rtx 4080 with 12gb vram still cant do much with a 3DCNN, right now 1 batch size, 5 frames at 320 * 160.

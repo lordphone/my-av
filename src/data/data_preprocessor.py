@@ -20,7 +20,7 @@ class DataPreprocessor:
             )
         ])
 
-    def preprocess_segment(self, segment_data, window_size=10, stride=10):
+    def preprocess_segment(self, segment_data, window_size=12, stride=12):
         """Preprocess a single segment of data with a sliding window."""
 
         # Get paths from the segment data

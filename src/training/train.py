@@ -11,7 +11,7 @@ from src.models.model import Model
 import os
 import time
 
-def train_model(dataset_path, batch_size=1, num_epochs=50, lr=0.001):
+def train_model(dataset_path, batch_size=2, num_epochs=50, lr=0.001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -27,27 +27,6 @@ def train_model(dataset_path, batch_size=1, num_epochs=50, lr=0.001):
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
-    # # Print examples from train_loader and val_loader
-    # print("Examples from train_loader:")
-    # for i, data in enumerate(train_loader):
-    #     if i >= 2:  # Print only the first 2 batches
-    #         break
-    #     print(f"Batch {i+1}:")
-    #     print(f"Frames shape: {data['frames'].shape}")
-    #     print(f"Steering shape: {data['steering'].shape}")
-    #     print(f"Speed shape: {data['speed'].shape}")
-    #     print()
-
-    #     print("Examples from val_loader:")
-    # for i, data in enumerate(val_loader):
-    #     if i >= 2:  # Print only the first 2 batches
-    #         break
-    #     print(f"Batch {i+1}:")
-    #     print(f"Frames shape: {data['frames'].shape}")
-    #     print(f"Steering shape: {data['steering'].shape}")
-    #     print(f"Speed shape: {data['speed'].shape}")
-    #     print()
 
     # Initialize model
     model = Model().to(device)
@@ -66,13 +45,10 @@ def train_model(dataset_path, batch_size=1, num_epochs=50, lr=0.001):
         running_loss = 0.0
         start_time = time.time()
 
-        for i, data in enumerate(train_loader):
-            if data is None:
-                continue
-
-            frames = data['frames'].to(device)
-            steering = data['steering'].to(device)
-            speed = data['speed'].to(device)
+        for i, batch in enumerate(train_loader):
+            frames = batch['frames'].to(device)  # Shape: [batch_size, 12, ...]
+            steering = batch['steering'].to(device)  # Shape: [batch_size, 12]
+            speed = batch['speed'].to(device)  # Shape: [batch_size, 12]
 
             # Forward pass
             steering_pred, speed_pred = model(frames)

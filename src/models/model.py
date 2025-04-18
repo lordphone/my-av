@@ -30,7 +30,7 @@ class Model(nn.Module):
         
         # Fully connected layers
         self.fc = nn.Sequential(
-            nn.Linear(self.get_conv_output_size((3, 10, 160, 320)), 512),
+            nn.Linear(self.get_conv_output_size((3, 12, 160, 320)), 512),
             nn.ReLU(),
             nn.Dropout(0.5)
         )

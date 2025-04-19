@@ -55,6 +55,23 @@ class DataPreprocessor:
         steering_for_frames = np.interp(frame_times, steering_times, steering_values)
         speed_for_frames = np.interp(frame_times, speed_times, speed_values)
 
+        # Pad frames, steering, and speed data to ensure all videos are 1200 frames long
+        target_length = 1200
+
+        # Pad frames
+        if len(frames) < target_length:
+            padding_frames = target_length - len(frames)
+            pad_frame = frames[-1] if frames else torch.zeros_like(self.transform(np.zeros((self.img_size[0], self.img_size[1], 3), dtype=np.uint8)))
+            frames.extend([pad_frame] * padding_frames)
+
+        # Pad steering and speed data
+        if len(steering_for_frames) < target_length:
+            padding_steering = target_length - len(steering_for_frames)
+            steering_for_frames = np.pad(steering_for_frames, (0, padding_steering), 'edge')
+        if len(speed_for_frames) < target_length:
+            padding_speed = target_length - len(speed_for_frames)
+            speed_for_frames = np.pad(speed_for_frames, (0, padding_speed), 'edge')
+
         # Stack frames into a single tensor
         frames_tensor = torch.stack(frames)
 

@@ -11,7 +11,7 @@ from src.models.model import Model
 import os
 import time
 
-def train_model(dataset_path, batch_size=2, num_epochs=50, lr=0.001):
+def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -27,6 +27,23 @@ def train_model(dataset_path, batch_size=2, num_epochs=50, lr=0.001):
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # Print dataset sizes
+    print(f"Training dataset size: {len(train_dataset)}")
+    print(f"Validation dataset size: {len(val_dataset)}")
+
+    for batch in train_loader:
+        if batch is None:
+            print("Batch is None, skipping...")
+            continue
+        frames = batch['frames']
+        steering = batch['steering']
+        speed = batch['speed']
+        print(f"Frames shape: {frames.shape}, Steering shape: {steering.shape}, Speed shape: {speed.shape}")
+        break
+    
+    for i, batch in enumerate(train_loader):
+        print(f"Batch {i}: {batch['frames'].shape}, {batch['steering'].shape}, {batch['speed'].shape}")
 
     # Initialize model
     model = Model().to(device)
@@ -46,7 +63,7 @@ def train_model(dataset_path, batch_size=2, num_epochs=50, lr=0.001):
         start_time = time.time()
 
         for i, batch in enumerate(train_loader):
-            frames = batch['frames'].to(device)  # Shape: [batch_size, 12, ...]
+            frames = batch['frames'].to(device)  # Shape: [batch_size, 12, 3, 160, 320]
             steering = batch['steering'].to(device)  # Shape: [batch_size, 12]
             speed = batch['speed'].to(device)  # Shape: [batch_size, 12]
 
@@ -64,11 +81,6 @@ def train_model(dataset_path, batch_size=2, num_epochs=50, lr=0.001):
             optimizer.step()
 
             running_loss += loss.item()
-
-            # Print training progress
-            if (i + 1) % 10 == 0:
-                print(f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(train_loader)}], Loss: {loss.item():.4f}")
-
             
         # Calculate average loss for the epoch
         running_loss /= len(train_loader)

@@ -1,29 +1,37 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import unittest
 from src.data.comma2k19dataset import Comma2k19Dataset
 
-# Define the base path to your dataset
-BASE_PATH = "/home/lordphone/my-av/data/raw/comma2k19"
+class TestComma2k19Dataset(unittest.TestCase):
 
-def test_dataset():
-    # Initialize the dataset
-    dataset = Comma2k19Dataset(base_path=BASE_PATH)
+    BASE_PATH = "/home/lordphone/my-av/data/raw/comma2k19"
 
-    # Check the number of samples
-    print(f"Number of samples: {len(dataset)}")
+    def test_dataset_initialization(self):
+        # Initialize the dataset
+        dataset = Comma2k19Dataset(base_path=self.BASE_PATH)
 
-    # Try loading the first sample
-    if len(dataset) > 0:
-        sample = dataset[0]
-        print("First sample loaded successfully:")
-        print(f"Image: {sample['image']}")
-        print(f"Video Path: {sample['video_path']}")
-        print(f"Log Path: {sample['log_path']}")
-        print(f"Pose Path: {sample['pose_path']}")
-        print(f"Metadata: {sample['metadata']}")
-    else:
-        print("No samples found in the dataset.")
+        # Check if the dataset is initialized correctly
+        self.assertIsNotNone(dataset)
+
+    def test_number_of_samples(self):
+        # Initialize the dataset
+        dataset = Comma2k19Dataset(base_path=self.BASE_PATH)
+
+        # Check the number of samples
+        self.assertGreaterEqual(len(dataset), 0, "Dataset should have zero or more samples.")
+
+    def test_first_sample_loading(self):
+        # Initialize the dataset
+        dataset = Comma2k19Dataset(base_path=self.BASE_PATH)
+
+        if len(dataset) > 0:
+            # Try loading the first sample
+            sample = dataset[0]
+            self.assertIn('video_path', sample)
+            self.assertIn('log_path', sample)
+            self.assertIn('pose_path', sample)
+            self.assertIn('metadata', sample)
+        else:
+            self.skipTest("No samples found in the dataset.")
 
 if __name__ == "__main__":
-    test_dataset()
+    unittest.main()

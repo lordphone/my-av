@@ -6,7 +6,7 @@ from src.utils.frame_reader import FrameReader
 
 class TestFrameReader(unittest.TestCase):
     def setUp(self):
-        self.video_path = "/home/lordphone/my-av/tests/data/Example_1/b0c9d2329ad1606b|2018-08-02--08-34-47/40/video.mp4"
+        self.video_path = "/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.mp4"
         self.reader = FrameReader(self.video_path)
     
     def test_basic_functionality(self):
@@ -112,6 +112,15 @@ class TestFrameReader(unittest.TestCase):
         except Exception as e:
             self.fail(f"get_frames method test failed: {e}")
 
+    def test_speed(self):
+        """Test the speed of frame extraction."""
+        import time
+        
+        start_time = time.time()
+        for _ in self.reader:
+            pass
+        elapsed_time = time.time() - start_time
+        print(f"Time taken to read the video: {elapsed_time:.2f} seconds")
 
 if __name__ == "__main__":
     unittest.main()

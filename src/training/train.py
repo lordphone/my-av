@@ -25,25 +25,24 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     val_size = len(processed_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(processed_dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
-    # Print dataset sizes
-    print(f"Training dataset size: {len(train_dataset)}")
-    print(f"Validation dataset size: {len(val_dataset)}")
-
-    for batch in train_loader:
-        if batch is None:
-            print("Batch is None, skipping...")
-            continue
-        frames = batch['frames']
-        steering = batch['steering']
-        speed = batch['speed']
-        print(f"Frames shape: {frames.shape}, Steering shape: {steering.shape}, Speed shape: {speed.shape}")
-        break
-    
-    for i, batch in enumerate(train_loader):
-        print(f"Batch {i}: {batch['frames'].shape}, {batch['steering'].shape}, {batch['speed'].shape}")
+    """ Uncomment to check dataset sizes and batch shapes"""
+    # # Print dataset sizes
+    # print(f"Training dataset size: {len(train_dataset)}")
+    # print(f"Validation dataset size: {len(val_dataset)}")
+    # for batch in train_loader:
+    #     if batch is None:
+    #         print("Batch is None, skipping...")
+    #         continue
+    #     frames = batch['frames']
+    #     steering = batch['steering']
+    #     speed = batch['speed']
+    #     print(f"Frames shape: {frames.shape}, Steering shape: {steering.shape}, Speed shape: {speed.shape}")
+    #     break
+    # for i, batch in enumerate(train_loader):
+    #     print(f"Batch {i}: {batch['frames'].shape}, {batch['steering'].shape}, {batch['speed'].shape}")
 
     # Initialize model
     model = Model().to(device)

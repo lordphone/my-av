@@ -25,8 +25,8 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     val_size = len(processed_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(processed_dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     """ Uncomment to check dataset sizes and batch shapes"""
     # # Print dataset sizes

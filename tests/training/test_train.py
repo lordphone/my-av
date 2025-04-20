@@ -13,7 +13,7 @@ class TestTrainModel(unittest.TestCase):
     def test_train(self):
         """Test if train_model runs without errors, and check if the model is saved."""
         try:
-            model = train_model(self.dataset_path, batch_size=2, num_epochs=1, lr=0.001)
+            model = train_model(self.dataset_path, batch_size=8, num_epochs=1, lr=0.001)
             self.assertIsNotNone(model, "Model should not be None after training.")
             saved_model_path = os.path.join(self.dataset_path, 'best_model.pth')
             self.assertTrue(os.path.exists(saved_model_path), "Best model file should be saved.")

@@ -76,10 +76,7 @@ class Comma2k19Dataset(torch.utils.data.Dataset):
         segment_path = os.path.join(self.base_path, f"Chunk_{chunk_id}", 
                                    route_id, str(segment_id))
         
-        # Load preview image
-        preview_path = os.path.join(segment_path, "preview.png")
-        preview_img = Image.open(preview_path)
-            
+
         # Load processed log path
         log_path = None
         if os.path.exists(os.path.join(segment_path, "processed_log")):
@@ -97,7 +94,6 @@ class Comma2k19Dataset(torch.utils.data.Dataset):
             
         # Return data as a dictionary
         return {
-            'image': preview_img,
             'log_path': log_path,
             'pose_path': pose_path,
             'video_path': video_path,

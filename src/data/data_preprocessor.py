@@ -59,10 +59,16 @@ class DataPreprocessor:
         target_length = 1200
 
         # Pad frames
-        if len(frames) < target_length:
-            padding_frames = target_length - len(frames)
+        current_len = len(frames)
+        if current_len < target_length:
+            padding_frames = target_length - current_len
+            # Use the last available frame for padding, or a zero tensor if no frames exist
             pad_frame = frames[-1] if frames else torch.zeros_like(self.transform(np.zeros((self.img_size[0], self.img_size[1], 3), dtype=np.uint8)))
             frames.extend([pad_frame] * padding_frames)
+        elif current_len > target_length: # Truncate if longer
+            frames = frames[:target_length]
+            steering_for_frames = steering_for_frames[:target_length]
+            speed_for_frames = speed_for_frames[:target_length]
 
         # Pad steering and speed data
         if len(steering_for_frames) < target_length:
@@ -79,22 +85,4 @@ class DataPreprocessor:
         steering_tensor = torch.tensor(steering_for_frames, dtype=torch.float32)
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
 
-        # Create sliding windows
-        num_windows = (len(frames_tensor) - window_size) // stride + 1
-        windowed_data = []
-
-        for i in range(num_windows):
-            start_idx = i * stride
-            end_idx = start_idx + window_size
-
-            window_frames = frames_tensor[start_idx:end_idx]
-            window_steering = steering_tensor[start_idx:end_idx]
-            window_speed = speed_tensor[start_idx:end_idx]
-
-            windowed_data.append({
-                'frames': window_frames,
-                'steering': window_steering,
-                'speed': window_speed,
-            })
-
-        return windowed_data
+        return frames_tensor, steering_tensor, speed_tensor

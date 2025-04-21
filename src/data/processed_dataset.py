@@ -5,25 +5,69 @@ from torch.utils.data import Dataset
 from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
-    def __init__(self, base_dataset, window_size=12):
+    def __init__(self, base_dataset, window_size=12, target_length=1200):
         self.base_dataset = base_dataset
         self.preprocessor = DataPreprocessor()
         self.window_size = window_size
+        self.target_length = target_length
+
+        # calculate window per segment based on target_length and window_size
+        self.windows_per_segment = target_length // window_size
+        self.segment_cache = {}
+
+        self._valid_indices = self._determine_valid_indices()
+        print(f"Initialized ProcessedDataset with {len(self._valid_indices)} valid windows.")
+    
+    def _determine_valid_indicies(self):
+        """Determine valid indices for the dataset based on the target length."""
+        valid_indices = []
+        total_possible_windows = len(self.base_dataset) * self.windows_per_segment
+        for i in range(total_possible_windows):
+            segment_idx = i // self.windows_per_segment
+            
+            # try to preload or at least check if the segment is valid
+            try:
+                segment_data = self.base_dataset[segment_idx]
+                valid_indices.append(i)
+            except IndexError:
+                continue
+        return valid_indices
 
     def __len__(self):
         # Calculate the total number of windows across all segments, each segment is 1200 frames
-        return len(self.base_dataset) * (1200 // self.window_size)
+        return len(self.base_dataset) * self.windows_per_segment
 
     def __getitem__(self, idx):
-        # Find the correct segment for the given index
-        segment_idx = idx // (1200 // self.window_size)
-        window_idx = idx % (1200 // self.window_size)
+        # Map the index to the segment and window
+        original_idx = self._valid_indices[idx]
 
-        # Get the segment data
-        segment_data = self.base_dataset[segment_idx]
+        # Calculate the segment index and window index
+        segment_idx = original_idx // self.windows_per_segment
+        window_idx = original_idx % self.windows_per_segment
 
-        # Preprocess the segment to get all windows
-        windowed_data = self.preprocessor.preprocess_segment(segment_data, window_size=self.window_size, stride=self.window_size)
+        # Check if the segment is already cached
+        if segment_idx not in self.segment_cache:
+            segment_data = self.base_dataset[segment_idx]
 
-        # Return the specific window
-        return windowed_data[window_idx]
+            # Load and prepare the segment
+            prepared_data = self.preprocessor.preprocess_segment(segment_data, target_length=self.target_length)
+            self.segment_cache[segment_idx] = prepared_data
+        
+        # Retrieve the cached segment data
+        frames_tensor, steering_tensor, speed_tensor = self.segment_cache[segment_idx]
+
+        # Extract the window of data
+        start_idx = window_idx * self.window_size
+        end_idx = start_idx + self.window_size
+
+        # slice the tensors to get the window
+        frames_window = frames_tensor[start_idx:end_idx]
+        steering_window = steering_tensor[start_idx:end_idx]
+        speed_window = speed_tensor[start_idx:end_idx]
+
+        # Return the window of data
+        return {
+            'frames': frames_window,
+            'steering': steering_window,
+            'speed': speed_window
+        }

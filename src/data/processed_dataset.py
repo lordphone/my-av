@@ -50,7 +50,7 @@ class ProcessedDataset(Dataset):
             segment_data = self.base_dataset[segment_idx]
 
             # Load and prepare the segment
-            prepared_data = self.preprocessor.preprocess_segment(segment_data, target_length=self.target_length)
+            prepared_data = self.preprocessor.preprocess_segment(segment_data)
             self.segment_cache[segment_idx] = prepared_data
         
         # Retrieve the cached segment data

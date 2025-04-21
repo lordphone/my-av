@@ -4,12 +4,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import os
+import time
+
 from torch.utils.data import DataLoader
 from src.data.comma2k19dataset import Comma2k19Dataset
 from src.data.processed_dataset import ProcessedDataset
 from src.models.model import Model
-import os
-import time
+from src.data.chunk_shuffling_sampler import ChunkShufflingSampler
 
 def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     # Set device
@@ -24,9 +26,20 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     train_size = int(0.8 * len(processed_dataset))
     val_size = len(processed_dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(processed_dataset, [train_size, val_size])
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        sampler=ChunkShufflingSampler(train_dataset, shuffle=True), 
+        num_workers=4, 
+        pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        sampler=ChunkShufflingSampler(val_dataset, shuffle=True), 
+        num_workers=4, 
+        pin_memory=True
+    )
 
     """ Uncomment to check dataset sizes and batch shapes"""
     # # Print dataset sizes

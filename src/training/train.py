@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.optim as optim
 import os
 import time
+import random
+import src.utils.data_utils as data_utils
 
 from torch.utils.data import DataLoader
 from src.data.comma2k19dataset import Comma2k19Dataset
@@ -22,21 +24,46 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     base_dataset = Comma2k19Dataset(dataset_path)
     processed_dataset = ProcessedDataset(base_dataset)
 
-    # Split dataset into train and validation sets
-    train_size = int(0.8 * len(processed_dataset))
-    val_size = len(processed_dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(processed_dataset, [train_size, val_size])
+    # Group dataset by video
+    video_indices = data_utils.get_video_indices(processed_dataset)  # Assuming this method exists
+    random.shuffle(video_indices)  # Shuffle videos
+    print(f"Video indices: {video_indices}")  # Print video indices
+
+    # Split videos into train and validation sets
+    num_videos = len(video_indices)
+    split_ratio = 0.8
+    split_index = int(num_videos * split_ratio)
+    train_videos_indices = video_indices[:split_index]
+    val_videos_indices = video_indices[split_index:]
+    print(f"Train videos: {train_videos_indices}")  # Print train videos
+    print(f"Validation videos: {val_videos_indices}")  # Print validation videos
+
+    """ Unfinished implementation of seperating dataset into train and validation sets, for now feeding the entire dataset into the model"""
+    # # Create a mapping of video indices to dataset indices
+    # train_indices = [idx for indices in data_utils.group_by_video(processed_dataset, train_videos_indices).values() for idx in indices]
+    # val_indices = [idx for indices in data_utils.group_by_video(processed_dataset, val_videos_indices).values() for idx in indices]
+    # print(f"Train indices: {train_indices}")  # Print train indices
+    # print(f"Validation indices: {val_indices}")  # Print validation indices
+
+    # # Create Subset datasets
+    # train_dataset = torch.utils.data.Subset(processed_dataset, train_indices)
+    # val_dataset = torch.utils.data.Subset(processed_dataset, val_indices)
+    # print(f"Train dataset: {train_dataset}")  # Print train dataset
+    # print(f"Validation dataset: {val_dataset}")  # Print validation dataset
+    # print(f"Training dataset size: {len(train_dataset)}")
+    # print(f"Validation dataset size: {len(val_dataset)}")
+
     train_loader = DataLoader(
-        train_dataset, 
+        processed_dataset, 
         batch_size=batch_size, 
-        sampler=ChunkShufflingSampler(train_dataset, shuffle=True), 
+        sampler=ChunkShufflingSampler(processed_dataset, video_indices=train_videos_indices, shuffle=True), 
         num_workers=4, 
         pin_memory=True
     )
     val_loader = DataLoader(
-        val_dataset, 
+        processed_dataset, 
         batch_size=batch_size, 
-        sampler=ChunkShufflingSampler(val_dataset, shuffle=True), 
+        sampler=ChunkShufflingSampler(processed_dataset, video_indices=val_videos_indices, shuffle=True), 
         num_workers=4, 
         pin_memory=True
     )

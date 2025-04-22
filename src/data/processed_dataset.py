@@ -16,7 +16,6 @@ class ProcessedDataset(Dataset):
         self.segment_cache = {}
 
         self._valid_indices = self._determine_valid_indices()
-        print(f"Initialized ProcessedDataset with {len(self._valid_indices)} valid windows.")
     
     def _determine_valid_indices(self):
         """Determine valid indices for the dataset based on the target length."""

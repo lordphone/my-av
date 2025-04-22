@@ -15,7 +15,7 @@ from src.data.processed_dataset import ProcessedDataset
 from src.models.model import Model
 from src.data.chunk_shuffling_sampler import ChunkShufflingSampler
 
-def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
+def train_model(dataset_path, batch_size=8, num_epochs=50, lr=0.001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -27,7 +27,7 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     # Group dataset by video
     video_indices = data_utils.get_video_indices(processed_dataset)  # Assuming this method exists
     random.shuffle(video_indices)  # Shuffle videos
-    print(f"Video indices: {video_indices}")  # Print video indices
+    # print(f"Video indices: {video_indices}")  # Print video indices
 
     # Split videos into train and validation sets
     num_videos = len(video_indices)
@@ -35,8 +35,8 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
     split_index = int(num_videos * split_ratio)
     train_videos_indices = video_indices[:split_index]
     val_videos_indices = video_indices[split_index:]
-    print(f"Train videos: {train_videos_indices}")  # Print train videos
-    print(f"Validation videos: {val_videos_indices}")  # Print validation videos
+    # print(f"Train videos: {train_videos_indices}")  # Print train videos
+    # print(f"Validation videos: {val_videos_indices}")  # Print validation videos
 
     """ Unfinished implementation of seperating dataset into train and validation sets, for now feeding the entire dataset into the model"""
     # # Create a mapping of video indices to dataset indices
@@ -168,5 +168,5 @@ def train_model(dataset_path, batch_size=4, num_epochs=50, lr=0.001):
 if __name__ == "__main__":
 
     # Example usage on placeholder dataset path
-    dataset_path = "/home/lordphone/my-av/tests/data"
+    dataset_path = "/home/lordphone/my-av/data/raw/comma2k19"
     train_model(dataset_path)

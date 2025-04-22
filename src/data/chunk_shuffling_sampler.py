@@ -32,9 +32,9 @@ class ChunkShufflingSampler(Sampler):
         """
         if self.shuffle:
             random.shuffle(self.video_indices)  # Shuffle the video indices
-            print(f"Unshuffled grouped indices: {self.grouped_indices}")
+            # print(f"Unshuffled grouped indices: {self.grouped_indices}")
             self.grouped_indices = self._group_by_video()  # Regenerate the grouped indices after shuffling
-            print(f"Shuffled grouped indices: {self.grouped_indices}")
+            # print(f"Shuffled grouped indices: {self.grouped_indices}")
 
         for group in self.grouped_indices.values():
             yield from group  # Yield all indices from the group sequentially

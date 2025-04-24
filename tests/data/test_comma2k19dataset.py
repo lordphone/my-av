@@ -18,6 +18,7 @@ class TestComma2k19Dataset(unittest.TestCase):
 
         # Check the number of samples
         self.assertGreaterEqual(len(dataset), 0, "Dataset should have zero or more samples.")
+        print(f"Number of samples in the dataset: {len(dataset)}")
 
     def test_first_sample_loading(self):
         # Initialize the dataset

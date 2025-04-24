@@ -6,6 +6,7 @@ from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
     def __init__(self, base_dataset, window_size=12, target_length=1200):
+        self.max_cache_size = 2
         self.base_dataset = base_dataset
         self.preprocessor = DataPreprocessor()
         self.window_size = window_size
@@ -14,6 +15,7 @@ class ProcessedDataset(Dataset):
         # calculate window per segment based on target_length and window_size
         self.windows_per_segment = target_length // window_size
         self.segment_cache = {}
+        self.cache_usage_order = []  # Track the order of cached segments
 
         self._valid_indices = self._determine_valid_indices()
     
@@ -46,12 +48,23 @@ class ProcessedDataset(Dataset):
 
         # Check if the segment is already cached
         if segment_idx not in self.segment_cache:
-            segment_data = self.base_dataset[segment_idx]
+            # evict the oldest segment if cache is full
+            if len(self.segment_cache) >= self.max_cache_size:
+                oldest_segment = self.cache_usage_order.pop(0)
+                del self.segment_cache[oldest_segment]
+
+            # Add the new segment to the cache usage order
+            self.cache_usage_order.append(segment_idx)
 
             # Load and prepare the segment
+            segment_data = self.base_dataset[segment_idx]
             prepared_data = self.preprocessor.preprocess_segment(segment_data)
             self.segment_cache[segment_idx] = prepared_data
-        
+        else:
+            # Update the usage order to mark this segment as recently used
+            self.cache_usage_order.remove(segment_idx)
+            self.cache_usage_order.append(segment_idx)
+
         # Retrieve the cached segment data
         frames_tensor, steering_tensor, speed_tensor = self.segment_cache[segment_idx]
 

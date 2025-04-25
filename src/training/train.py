@@ -8,6 +8,20 @@ import os
 import time
 import random
 import src.utils.data_utils as data_utils
+import datetime
+
+# for logging
+import logging
+import time
+import gc
+
+# Update logging configuration to create a new log file for every training session
+log_filename = f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+logging.basicConfig(
+    filename=log_filename,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 from torch.utils.data import DataLoader
 from src.data.comma2k19dataset import Comma2k19Dataset
@@ -15,14 +29,15 @@ from src.data.processed_dataset import ProcessedDataset
 from src.models.model import Model
 from src.data.chunk_shuffling_sampler import ChunkShufflingSampler
 
-def train_model(dataset_path, batch_size=8, num_epochs=50, lr=0.001):
+def train_model(dataset_path, window_size=12, batch_size=8, num_epochs=20, lr=0.001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    logging.info(f"Using device: {device}")
 
     # Load dataset
     base_dataset = Comma2k19Dataset(dataset_path)
-    processed_dataset = ProcessedDataset(base_dataset)
+    processed_dataset = ProcessedDataset(base_dataset, window_size=window_size)
 
     # Group dataset by video
     video_indices = data_utils.get_video_indices(processed_dataset)  # Assuming this method exists
@@ -85,13 +100,16 @@ def train_model(dataset_path, batch_size=8, num_epochs=50, lr=0.001):
     #     print(f"Batch {i}: {batch['frames'].shape}, {batch['steering'].shape}, {batch['speed'].shape}")
 
     # Initialize model
-    model = Model().to(device)
+    model = Model(window_size=window_size).to(device)
 
     # Define loss function and optimizer
     criterion_steering = nn.MSELoss()
     criterion_speed = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+
+    # Set log interval
+    log_interval = 1000  # Log every 1000 batches
 
     # Training loop
     best_val_loss = float('inf')
@@ -100,6 +118,7 @@ def train_model(dataset_path, batch_size=8, num_epochs=50, lr=0.001):
         model.train()
         running_loss = 0.0
         start_time = time.time()
+        logging.info(f"Starting epoch {epoch+1}/{num_epochs}")
 
         for i, batch in enumerate(train_loader):
             frames = batch['frames'].to(device)  # Shape: [batch_size, 12, 3, 160, 320]
@@ -120,6 +139,10 @@ def train_model(dataset_path, batch_size=8, num_epochs=50, lr=0.001):
             optimizer.step()
 
             running_loss += loss.item()
+
+            # Log progress every 1000 batches
+            if (i + 1) % log_interval == 0:
+                logging.info(f"Batch [{i+1}/{len(train_loader)}] - Loss: {loss.item():.4f}")
             
         # Calculate average loss for the epoch
         running_loss /= len(train_loader)
@@ -155,14 +178,18 @@ def train_model(dataset_path, batch_size=8, num_epochs=50, lr=0.001):
         epoch_time = time.time() - start_time
         print(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
         print(f"Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}")
+        logging.info(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
+        logging.info(f"Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}")
 
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), os.path.join(dataset_path, 'best_model.pth'))
             print(f"Best model saved with validation loss: {best_val_loss:.4f}")
+            logging.info(f"Best model saved with validation loss: {best_val_loss:.4f}")
         
     print("Training completed.")
+    logging.info("Training completed.")
     return model
 
 if __name__ == "__main__":

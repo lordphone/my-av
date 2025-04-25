@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
-    def __init__(self, base_dataset, window_size=12, target_length=1200):
+    def __init__(self, base_dataset, window_size=16, target_length=1200):
         self.max_cache_size = 2
         self.base_dataset = base_dataset
         self.preprocessor = DataPreprocessor()

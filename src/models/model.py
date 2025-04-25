@@ -7,7 +7,7 @@ import torch.nn as nn
 import torchvision.models as models
 
 class Model(nn.Module):
-    def __init__(self):
+    def __init__(self, window_size):
         super(Model, self).__init__()
         
         # Use 3D convolutions for temporal processing
@@ -30,14 +30,14 @@ class Model(nn.Module):
         
         # Fully connected layers
         self.fc = nn.Sequential(
-            nn.Linear(self.get_conv_output_size((3, 12, 160, 320)), 512),
+            nn.Linear(self.get_conv_output_size((3, window_size, 160, 320)), 512),
             nn.ReLU(),
             nn.Dropout(0.5)
         )
         
         # Output heads
-        self.steering_head = nn.Linear(512, 12)
-        self.speed_head = nn.Linear(512, 12)
+        self.steering_head = nn.Linear(512, window_size)
+        self.speed_head = nn.Linear(512, window_size)
 
     def get_conv_output_size(self, input_shape):
         if self._conv_output_size is None:

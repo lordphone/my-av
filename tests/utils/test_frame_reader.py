@@ -122,5 +122,31 @@ class TestFrameReader(unittest.TestCase):
         elapsed_time = time.time() - start_time
         print(f"Time taken to read the video: {elapsed_time:.2f} seconds")
 
+    def test_save_frame_as_png(self):
+        """Test saving a specific frame as a PNG file using matplotlib."""
+        import matplotlib.pyplot as plt
+
+        frame_idx = 10  # Choose a specific frame index
+        output_path = "/home/lordphone/my-av/tests/data/saved_frame.png"
+
+        try:
+            # Retrieve the frame
+            frame = self.reader.get(frame_idx)
+
+            # Save the frame as a PNG file using matplotlib
+            plt.imsave(output_path, frame)
+
+            # Verify the file was created
+            self.assertTrue(os.path.exists(output_path))
+
+            # Optionally, verify the file is not empty
+            self.assertGreater(os.path.getsize(output_path), 0)
+        except Exception as e:
+            self.fail(f"Saving frame as PNG test failed: {e}")
+        finally:
+            # Clean up by removing the saved file
+            if os.path.exists(output_path):
+                os.remove(output_path)
+
 if __name__ == "__main__":
     unittest.main()

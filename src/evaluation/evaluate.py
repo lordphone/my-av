@@ -17,30 +17,6 @@ def denormalize_image(image, mean, std):
     std = np.array(std).reshape(3, 1, 1)
     return (image * std) + mean
 
-def plot_trajectory_overlay(ax, image, steering_pred, speed_pred):
-    """Overlay a trajectory cone on the image based on predictions."""
-    height, width, _ = image.shape
-
-    # Define the starting point (center bottom of the image)
-    start_x = width // 2
-    start_y = height
-
-    # Define the trajectory cone (adjusted scaling for better visibility)
-    cone_width = max(10, int(abs(steering_pred) * 200))  # Ensure minimum width for visibility
-    cone_height = max(20, int(speed_pred * 100))  # Ensure minimum height for visibility
-
-    # Draw the cone as a triangle
-    triangle = patches.Polygon(
-        [[start_x, start_y], [start_x - cone_width, start_y - cone_height], [start_x + cone_width, start_y - cone_height]],
-        closed=True,
-        color='red',
-        alpha=0.5  # Increase opacity for better visibility
-    )
-    ax.add_patch(triangle)
-
-    # Add a center line for better clarity
-    ax.plot([start_x, start_x], [start_y, start_y - cone_height], color='yellow', linestyle='--', linewidth=2)
-
 def evaluate(model_path, dataset_path, num_samples=1):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -72,7 +48,7 @@ def evaluate(model_path, dataset_path, num_samples=1):
             steering_pred, speed_pred = model(frames)
 
             # Store results
-            steering_pred = steering_pred.cpu().numpy()
+            steering_pred = steering_pred.cpu().numpy() 
             speed_pred = speed_pred.cpu().numpy()
 
             # Store the predictions and ground truth
@@ -99,11 +75,13 @@ def evaluate(model_path, dataset_path, num_samples=1):
             ax.set_title("Evaluation Frames")
 
             # Overlay trajectory cone
-            plot_trajectory_overlay(ax, denormalized_frame.transpose(1, 2, 0), result['steering_pred'], result['speed_pred'])
+            # plot_trajectory_overlay(ax, denormalized_frame.transpose(1, 2, 0), result['steering_pred'], result['speed_pred'])
 
             # Add steering and speed plots
-            plt.figtext(0.15, 0.8, f"Steering: {result['steering']:.2f} | Predicted Steering: {result['steering_pred']:.2f}", fontsize=12)
-            plt.figtext(0.15, 0.75, f"Speed: {result['speed']:.2f} | Predicted Speed: {result['speed_pred']:.2f}", fontsize=12)
+            plt.figtext(0.15, 0.8, f"Steering: {result['steering']:.2f} | Predicted Steering: {result['steering_pred']:.2f}", 
+                        fontsize=12, color='white', bbox=dict(facecolor='black', edgecolor='none', boxstyle='round,pad=0.3'))
+            plt.figtext(0.15, 0.75, f"Speed: {result['speed']:.2f} | Predicted Speed: {result['speed_pred']:.2f}", 
+                        fontsize=12, color='white', bbox=dict(facecolor='black', edgecolor='none', boxstyle='round,pad=0.3'))
             plt.tight_layout()
             plt.savefig(f"evaluation_result_{i}.png")
             plt.close()

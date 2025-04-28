@@ -56,27 +56,28 @@ class FrameReader:
             return False
     
     def _load_batch(self, start_idx):
-        """Load a batch of frames starting from start_idx"""
+        """Load a batch of frames starting from start_idx."""
         batch_size = min(self.batch_size, self.num_frames - start_idx)
         if batch_size <= 0:
             return None
-            
-        # Set up ffmpeg command with appropriate hardware acceleration
-        input_args = {'ss': start_idx / self.fps}
+
+        # Set up ffmpeg command without 'ss' for HEVC compatibility
+        input_args = {}
         if self.use_cuda:
             input_args.update({'hwaccel': 'cuda', 'hwaccel_device': '0'})
-            
-        # Process a batch of frames at once
+
+        # Use frame-based seeking instead of timestamp-based seeking
         out, _ = (
             ffmpeg
             .input(self.video_path, **input_args)
+            .filter('select', f'gte(n,{start_idx})')  # Select frames starting from start_idx
             .output('pipe:', format='rawvideo', pix_fmt='rgb24', vframes=batch_size)
             .run(capture_stdout=True, quiet=True)
         )
-        
+
         if not out:
             return None
-            
+
         # Reshape into individual frames
         frames = np.frombuffer(out, np.uint8).reshape([batch_size, self.height, self.width, 3])
         return frames

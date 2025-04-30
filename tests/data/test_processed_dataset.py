@@ -9,9 +9,9 @@ class TestProcessedDataset(unittest.TestCase):
     def setUp(self):
         self.base_dataset_path = '/home/lordphone/my-av/tests/data'
         self.base_dataset = Comma2k19Dataset(self.base_dataset_path)
-        self.batch_size = 2
-        self.window_size = 12
-        self.target_length = 1200
+        self.batch_size = 8
+        self.window_size = 15
+        self.target_length = 600
         print(f"Base dataset size: {len(self.base_dataset)}")
 
     def test_torch(self):

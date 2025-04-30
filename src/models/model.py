@@ -7,7 +7,7 @@ import torch.nn as nn
 import torchvision.models as models
 
 class Model(nn.Module):
-    def __init__(self, window_size=16):
+    def __init__(self, window_size=15):
         super(Model, self).__init__()
         
         # Use 3D convolutions for temporal processing

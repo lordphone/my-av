@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
-    def __init__(self, base_dataset, window_size=16, target_length=1200):
+    def __init__(self, base_dataset, window_size=16, target_length=600):
         self.max_cache_size = 2
         self.base_dataset = base_dataset
         self.preprocessor = DataPreprocessor()
@@ -35,7 +35,7 @@ class ProcessedDataset(Dataset):
         return valid_indices
 
     def __len__(self):
-        # Calculate the total number of windows across all segments, each segment is 1200 frames
+        # Calculate the total number of windows across all segments, each segment is 600 frames
         return len(self.base_dataset) * self.windows_per_segment
 
     def __getitem__(self, idx):

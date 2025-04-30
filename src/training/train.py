@@ -15,13 +15,22 @@ import logging
 import time
 import gc
 
-# Update logging configuration to create a new log file for every training session
-log_filename = f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+# Update logging configuration to save logs in a dedicated 'logs' directory
+log_dir = "logs"  # Directory to save training logs
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+    logging.info(f"Created log directory: {log_dir}")
+
+log_filename = os.path.join(log_dir, f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
 logging.basicConfig(
     filename=log_filename,
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+# A handler to print logs to console
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(console_handler)
 
 from torch.utils.data import DataLoader
 from src.data.comma2k19dataset import Comma2k19Dataset
@@ -29,11 +38,37 @@ from src.data.processed_dataset import ProcessedDataset
 from src.models.model import Model
 from src.data.chunk_shuffling_sampler import ChunkShufflingSampler
 
-def train_model(dataset_path, window_size=12, batch_size=8, num_epochs=20, lr=0.001):
+from collections import OrderedDict
+
+# Function to save checkpoints
+def save_checkpoint(state, filename="checkpoint.pth"):
+    """Save the model checkpoint."""
+    logging.info(f"Saving checkpoint to {filename}")
+    torch.save(state, filename)
+
+def train_model(
+    dataset_path, 
+    checkpoint_dir="checkpoints", # Directory to save checkpoints
+    resume_from=None, # Path to resume from checkpoint
+    window_size=15, 
+    batch_size=8, 
+    num_epochs=20, 
+    lr=0.001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     logging.info(f"Using device: {device}")
+
+    # Create checkpoint directory if it doesn't exist
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+        logging.info(f"Created checkpoint directory: {checkpoint_dir}")
+
+    # Create model directory if it doesn't exist
+    model_dir = "models"  # Directory to save models
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+        logging.info(f"Created model directory: {model_dir}")
 
     # Load dataset
     base_dataset = Comma2k19Dataset(dataset_path)
@@ -108,22 +143,69 @@ def train_model(dataset_path, window_size=12, batch_size=8, num_epochs=20, lr=0.
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
+    # --- Checkpoint Loading ---
+    start_epoch = 0
+    best_val_loss = float('inf')
+    if resume_from and os.path.isfile(resume_from):
+        logging.info(f"Loading checkpoint from {resume_from}")
+        # Load checkpoint on the CPU first
+        checkpoint = torch.load(resume_from, map_location='cpu')
+
+        # Load model state
+        model_state_dict = checkpoint['model_state_dict']
+        # If the checkpoint was saved with DataParallel, keys might start with 'module.'
+        if all(key.startswith('module.') for key in model_state_dict.keys()):
+            # Create a new state dict without 'module.' prefix
+            new_state_dict = OrderedDict()
+            for key, value in model_state_dict.items():
+                name = key[7:]  # Remove 'module.' prefix
+                new_state_dict[name] = value
+            model.load_state_dict(new_state_dict)
+        else:
+            model.load_state_dict(model_state_dict)
+
+        # Move model to the correct device after loading the state dict
+        model.to(device)
+
+        # Load optimizer state
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # Manually move the optimizer state to the correct device
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.to(device)
+    
+        # Load scheduler state
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
+        # Load other training parameters
+        start_epoch = checkpoint['epoch']
+        best_val_loss = checkpoint['best_val_loss']
+    else:
+        if resume_from:
+             logging.warning(f"Checkpoint file not found at '{resume_from}'. Starting training from scratch.")
+        else:
+             logging.info("No checkpoint specified. Starting training from scratch.")
+
     # Set log interval
     log_interval = 1000  # Log every 1000 batches
 
     # Training loop
     best_val_loss = float('inf')
 
-    for epoch in range(num_epochs):
+    logging.info(f"Starting training for {num_epochs} epochs.")
+
+    # --- Training Phase ---
+    for epoch in range(start_epoch, num_epochs):
+        epoch_start_time = time.time()
+        logging.info(f"Starting epoch {epoch+1}/{num_epochs}")
         model.train()
         running_loss = 0.0
-        start_time = time.time()
-        logging.info(f"Starting epoch {epoch+1}/{num_epochs}")
 
         for i, batch in enumerate(train_loader):
-            frames = batch['frames'].to(device)  # Shape: [batch_size, 12, 3, 160, 320]
-            steering = batch['steering'].to(device)  # Shape: [batch_size, 12]
-            speed = batch['speed'].to(device)  # Shape: [batch_size, 12]
+            frames = batch['frames'].to(device)  # Shape: [batch_size, window_length, 3, 160, 320]
+            steering = batch['steering'].to(device)  # Shape: [batch_size, window_length]
+            speed = batch['speed'].to(device)  # Shape: [batch_size, window_length]
 
             # Forward pass
             steering_pred, speed_pred = model(frames)
@@ -142,12 +224,19 @@ def train_model(dataset_path, window_size=12, batch_size=8, num_epochs=20, lr=0.
 
             # Log progress every 1000 batches
             if (i + 1) % log_interval == 0:
-                logging.info(f"Batch [{i+1}/{len(train_loader)}] - Loss: {loss.item():.4f}")
-            
-        # Calculate average loss for the epoch
-        running_loss /= len(train_loader)
+                            batch_time = time.time()
+                            batches_processed = i + 1
+                            total_batches = len(train_loader)
+                            time_per_batch = (batch_time - epoch_start_time) / batches_processed
+                            eta_seconds = time_per_batch * (total_batches - batches_processed)
+                            eta_formatted = str(datetime.timedelta(seconds=int(eta_seconds)))
+                            logging.info(f"Epoch [{epoch+1}/{num_epochs}] Batch [{batches_processed}/{total_batches}] - Loss: {loss.item():.4f} - ETA: {eta_formatted}")
 
-        # Validation
+        # Calculate average loss for the epoch
+        avg_train_loss = running_loss / len(train_loader)
+        # --- End of Training Phase ---
+
+        # --- Validation Phase ---
         model.eval()
         val_loss = 0.0
 
@@ -169,31 +258,61 @@ def train_model(dataset_path, window_size=12, batch_size=8, num_epochs=20, lr=0.
                 val_loss += loss.item()
 
         # Calculate average validation loss
-        val_loss /= len(val_loader)
+        avg_val_loss = val_loss / len(val_loader)
+        # --- End of Validation Phase ---
 
         # Update learning rate
-        scheduler.step(val_loss)
+        scheduler.step(avg_val_loss)
 
         # Print each epoch summary
-        epoch_time = time.time() - start_time
+        epoch_time = time.time() - epoch_start_time
         print(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
         print(f"Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
         logging.info(f"Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}")
 
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(model.state_dict(), os.path.join(dataset_path, 'best_model.pth'))
-            print(f"Best model saved with validation loss: {best_val_loss:.4f}")
-            logging.info(f"Best model saved with validation loss: {best_val_loss:.4f}")
+        # --- Checkpoint Saving ---
+        is_best = avg_val_loss < best_val_loss
+        if is_best:
+            best_val_loss = avg_val_loss
+            best_model_path = os.path.join(model_dir, 'best_model.pth')
+            logging.info(f"New best model found! Saving to {best_model_path}")
+            torch.save(model.state_dict(), best_model_path)
+        
+        # Save the latest checkpoint including optimizer state etc.
+        latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+        }, filename=latest_checkpoint_path)
+        # --- End of Checkpoint Saving ---
         
     print("Training completed.")
     logging.info("Training completed.")
     return model
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Train a model with checkpointing.')
+    parser.add_argument('--data_path', type=str, default="/home/lordphone/my-av/data/raw/comma2k19", help='Path to the dataset.')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='Directory to save checkpoints.')
+    parser.add_argument('--resume_from', type=str, default=None, help='Path to checkpoint file to resume training from (e.g., checkpoints/latest_checkpoint.pth).')
+    parser.add_argument('--window_size', type=int, default=12, help='Sequence length for model input.')
+    parser.add_argument('--batch_size', type=int, default=8, help='Training batch size.')
+    parser.add_argument('--num_epochs', type=int, default=20, help='Number of training epochs.')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate.')
 
-    # Example usage on placeholder dataset path
-    dataset_path = "/home/lordphone/my-av/data/raw/comma2k19"
-    train_model(dataset_path)
+    args = parser.parse_args()
+
+    train_model(
+        dataset_path=args.data_path,
+        checkpoint_dir=args.checkpoint_dir,
+        resume_from=args.resume_from,
+        window_size=args.window_size,
+        batch_size=args.batch_size,
+        num_epochs=args.num_epochs,
+        lr=args.lr
+    )

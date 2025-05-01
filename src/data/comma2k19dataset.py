@@ -89,8 +89,8 @@ class Comma2k19Dataset(torch.utils.data.Dataset):
 
         # Load video path
         video_path = None
-        if os.path.exists(os.path.join(segment_path, "video.mp4")):
-            video_path = os.path.join(segment_path, "video.mp4")
+        if os.path.exists(os.path.join(segment_path, "video.hevc")):
+            video_path = os.path.join(segment_path, "video.hevc")
             
         # Return data as a dictionary
         return {

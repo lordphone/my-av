@@ -10,7 +10,7 @@ class TestDataPreprocessor(unittest.TestCase):
         """Set up test fixtures - run preprocessing once and store the results for all tests"""
         self.data_preprocessor = DataPreprocessor(img_size=(160, 320))
         self.segment_data = {
-            'video_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.mp4',
+            'video_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.hevc',
             'log_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/processed_log',
             'pose_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/global_pose'
         }

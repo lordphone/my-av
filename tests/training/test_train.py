@@ -22,7 +22,7 @@ class TestTrainModel(unittest.TestCase):
             start_time = time.time()
             model = train_model(self.dataset_path, window_size=15, batch_size=8, num_epochs=2, lr=0.001)
             self.assertIsNotNone(model, "Model should not be None after training.")
-            saved_model_path = os.path.join(self.dataset_path, 'best_model.pth')
+            saved_model_path = 'models/best_model.pth'
             self.assertTrue(os.path.exists(saved_model_path), "Best model file should be saved.")
             end_time = time.time()
             print(f"Training completed in {end_time - start_time:.2f} seconds.")

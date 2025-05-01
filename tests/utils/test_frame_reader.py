@@ -6,7 +6,7 @@ from src.utils.frame_reader import FrameReader
 
 class TestFrameReader(unittest.TestCase):
     def setUp(self):
-        self.video_path = "/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.mp4"
+        self.video_path = "/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.hevc"
         self.reader = FrameReader(self.video_path)
     
     def test_basic_functionality(self):

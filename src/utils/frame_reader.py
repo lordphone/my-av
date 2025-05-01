@@ -11,7 +11,7 @@ class FrameReader:
     - Checking for CUDA availability and using it for hardware acceleration if possible.
     - Using ffmpeg to read frames in batches instead of one at a time.
     """
-    def __init__(self, video_path, use_cuda=True, batch_size=100):
+    def __init__(self, video_path, use_cuda=False, batch_size=100):
         self.video_path = video_path
         self.use_cuda = use_cuda and self._is_cuda_available()
         self.batch_frames = None
@@ -34,9 +34,25 @@ class FrameReader:
         self.fps = eval(video_stream['r_frame_rate'])
         
         # Get total number of frames
-        self.num_frames = int(float(video_stream['nb_frames']) if 'nb_frames' in video_stream else 
-                             float(video_stream['duration']) * self.fps)
-        
+        self.num_frames = 0
+        # Use ffmpeg to count the total number of frames
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
+                    "-show_entries", "stream=nb_read_frames", "-of", "default=nokey=1:noprint_wrappers=1",
+                    self.video_path
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True
+            )
+            self.num_frames = int(result.stdout.strip())
+        except subprocess.SubprocessError as e:
+            print(f"FFmpeg stderr output: {e.stderr}")  # Log the stderr output for debugging
+            raise RuntimeError(f"Failed to count frames in video {self.video_path}: {e}")
+
         # Initialize iteration state
         self._current_frame = 0
     
@@ -67,13 +83,17 @@ class FrameReader:
             input_args.update({'hwaccel': 'cuda', 'hwaccel_device': '0'})
 
         # Use frame-based seeking instead of timestamp-based seeking
-        out, _ = (
-            ffmpeg
-            .input(self.video_path, **input_args)
-            .filter('select', f'gte(n,{start_idx})')  # Select frames starting from start_idx
-            .output('pipe:', format='rawvideo', pix_fmt='rgb24', vframes=batch_size)
-            .run(capture_stdout=True, quiet=True)
-        )
+        try:
+            out, err = (
+                ffmpeg
+                .input(self.video_path, **input_args)
+                .filter('select', f'gte(n,{start_idx})')
+                .output('pipe:', format='rawvideo', pix_fmt='rgb24', vframes=batch_size)
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+        except ffmpeg.Error as e:
+            print(f"FFmpeg error while loading batch starting at frame {start_idx}: {e.stderr.decode('utf-8')}")
+            raise
 
         if not out:
             return None

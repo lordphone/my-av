@@ -191,8 +191,6 @@ def train_model(
     log_interval = 1000  # Log every 1000 batches
 
     # Training loop
-    best_val_loss = float('inf')
-
     logging.info(f"Starting training for {num_epochs} epochs.")
 
     # --- Training Phase ---

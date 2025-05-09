@@ -1,0 +1,17 @@
+2025-05-08 04:08:39,795 - INFO - Using device: cuda
+2025-05-08 04:08:41,945 - INFO - Loading checkpoint from checkpoints/latest_checkpoint.pth
+2025-05-08 04:08:44,180 - INFO - Starting training for 20 epochs.
+2025-05-08 04:08:44,180 - INFO - Starting epoch 8/20
+2025-05-08 05:48:21,866 - INFO - Epoch [8/20] Batch [1000/10175] - Loss: 498.5548 - ETA: 15:14:05
+2025-05-08 07:27:02,279 - INFO - Epoch [8/20] Batch [2000/10175] - Loss: 91.9968 - ETA: 13:30:33
+2025-05-08 09:05:09,332 - INFO - Epoch [8/20] Batch [3000/10175] - Loss: 22.5912 - ETA: 11:48:56
+2025-05-08 10:44:18,469 - INFO - Epoch [8/20] Batch [4000/10175] - Loss: 81.3072 - ETA: 10:10:39
+2025-05-08 12:22:41,174 - INFO - Epoch [8/20] Batch [5000/10175] - Loss: 8.6744 - ETA: 8:31:14
+2025-05-08 14:02:05,011 - INFO - Epoch [8/20] Batch [6000/10175] - Loss: 101.3853 - ETA: 6:52:52
+2025-05-08 15:41:56,481 - INFO - Epoch [8/20] Batch [7000/10175] - Loss: 51.4835 - ETA: 5:14:25
+2025-05-08 17:20:41,813 - INFO - Epoch [8/20] Batch [8000/10175] - Loss: 70.4241 - ETA: 3:35:18
+2025-05-08 20:58:39,746 - INFO - Epoch [8/20] completed in 60595.57 seconds
+2025-05-08 20:58:39,746 - INFO - Training Loss: 4361318.1300, Validation Loss: 697711.3386
+2025-05-08 20:58:39,746 - INFO - New best model found! Saving to models/best_model.pth
+2025-05-08 20:58:41,701 - INFO - Saving checkpoint to checkpoints/latest_checkpoint.pth
+2025-05-08 20:58:46,364 - INFO - Starting epoch 9/20

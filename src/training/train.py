@@ -205,12 +205,16 @@ def train_model(
             steering = batch['steering'].to(device)  # Shape: [batch_size, window_length]
             speed = batch['speed'].to(device)  # Shape: [batch_size, window_length]
 
+            # Get only the last frame's ground truth values (current frame we're predicting)
+            current_steering = steering[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
+            current_speed = speed[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
+
             # Forward pass
             steering_pred, speed_pred = model(frames)
 
-            # Compute loss
-            loss_steering = criterion_steering(steering_pred, steering)
-            loss_speed = criterion_speed(speed_pred, speed)
+            # Compute loss - now comparing single predictions with the last frame's values
+            loss_steering = criterion_steering(steering_pred, current_steering)
+            loss_speed = criterion_speed(speed_pred, current_speed)
             loss = loss_steering + loss_speed
             
             # Backward pass and optimization
@@ -247,10 +251,14 @@ def train_model(
                 steering = data['steering'].to(device)
                 speed = data['speed'].to(device)
 
+                # Get only the last frame's ground truth values
+                current_steering = steering[:, -1].unsqueeze(1)
+                current_speed = speed[:, -1].unsqueeze(1)
+
                 steering_pred, speed_pred = model(frames)
 
-                loss_steering = criterion_steering(steering_pred, steering)
-                loss_speed = criterion_speed(speed_pred, speed)
+                loss_steering = criterion_steering(steering_pred, current_steering)
+                loss_speed = criterion_speed(speed_pred, current_speed)
                 loss = loss_steering + loss_speed
 
                 val_loss += loss.item()

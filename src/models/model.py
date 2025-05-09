@@ -36,8 +36,8 @@ class Model(nn.Module):
         )
         
         # Output heads
-        self.steering_head = nn.Linear(512, window_size)
-        self.speed_head = nn.Linear(512, window_size)
+        self.steering_head = nn.Linear(512, 1) # Single output for current steering
+        self.speed_head = nn.Linear(512, 1) # Single output for current speed
 
     def get_conv_output_size(self, input_shape):
         if self._conv_output_size is None:

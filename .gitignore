@@ -7,12 +7,17 @@ my_av.egg-info/
 # data
 /data
 
-# CARLA
-/carla
-
 # Python Related
 __pycache__/
 .pytest_cache/
 
 # secrets
 .secrets
+
+# Training checkpoints, logs, and models
+checkpoints/*
+logs/*
+models/*
+
+# Testing Data
+tests/data/Chunk_1/

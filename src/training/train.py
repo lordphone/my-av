@@ -50,9 +50,9 @@ def train_model(
     dataset_path, 
     checkpoint_dir="checkpoints", # Directory to save checkpoints
     resume_from=None, # Path to resume from checkpoint
-    window_size=15, 
+    window_size=10, 
     batch_size=8, 
-    num_epochs=20, 
+    num_epochs=30, 
     lr=0.001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -140,8 +140,15 @@ def train_model(
     # Define loss function and optimizer
     criterion_steering = nn.MSELoss()
     criterion_speed = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)  # Reduced learning rate
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+
+    # Loss weights
+    steering_weight = 1.0
+    speed_weight = 0.5
+
+    # Gradient clipping
+    max_grad_norm = 1.0
 
     # --- Checkpoint Loading ---
     start_epoch = 0
@@ -215,11 +222,13 @@ def train_model(
             # Compute loss - now comparing single predictions with the last frame's values
             loss_steering = criterion_steering(steering_pred, current_steering)
             loss_speed = criterion_speed(speed_pred, current_speed)
-            loss = loss_steering + loss_speed
+            loss = steering_weight * loss_steering + speed_weight * loss_speed
             
             # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
+            # Add gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
 
             running_loss += loss.item()
@@ -259,7 +268,7 @@ def train_model(
 
                 loss_steering = criterion_steering(steering_pred, current_steering)
                 loss_speed = criterion_speed(speed_pred, current_speed)
-                loss = loss_steering + loss_speed
+                loss = steering_weight * loss_steering + speed_weight * loss_speed
 
                 val_loss += loss.item()
 
@@ -306,9 +315,9 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', type=str, default="/home/lordphone/my-av/data/raw/comma2k19", help='Path to the dataset.')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='Directory to save checkpoints.')
     parser.add_argument('--resume_from', type=str, default='checkpoints/latest_checkpoint.pth', help='Path to checkpoint file to resume training from (e.g., checkpoints/latest_checkpoint.pth).')
-    parser.add_argument('--window_size', type=int, default=15, help='Sequence length for model input.')
+    parser.add_argument('--window_size', type=int, default=10, help='Sequence length for model input.')
     parser.add_argument('--batch_size', type=int, default=8, help='Training batch size.')
-    parser.add_argument('--num_epochs', type=int, default=20, help='Number of training epochs.')
+    parser.add_argument('--num_epochs', type=int, default=30, help='Number of training epochs.')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate.')
 
     args = parser.parse_args()

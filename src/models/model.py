@@ -28,9 +28,18 @@ class Model(nn.Module):
         # Dynamically calculate the size after convolutions
         self._conv_output_size = None
         
-        # Fully connected layers
+        # Add recurrent layer - GRU
+        self.rnn_hidden_size = 256
+        self.rnn = nn.GRU(
+            input_size=self.get_conv_output_size((3, window_size, 160, 320)),
+            hidden_size=self.rnn_hidden_size,
+            batch_first=True,
+            num_layers=1
+        )
+        
+        # Fully connected layers - now take input from RNN instead of CNN
         self.fc = nn.Sequential(
-            nn.Linear(self.get_conv_output_size((3, window_size, 160, 320)), 512),
+            nn.Linear(self.rnn_hidden_size, 512),
             nn.ReLU(),
             nn.Dropout(0.5)
         )
@@ -48,6 +57,8 @@ class Model(nn.Module):
         return self._conv_output_size
 
     def forward(self, x):
+        batch_size = x.size(0)
+        
         # x shape: [batch_size, sequence_length, channels, height, width]
         # Rearrange to [batch_size, channels, sequence_length, height, width]
         x = x.permute(0, 2, 1, 3, 4)
@@ -55,8 +66,16 @@ class Model(nn.Module):
         # Process with 3D convolutions
         x = self.conv3d(x)
         
-        # Flatten
-        x = x.view(x.size(0), -1)
+        # keep the time axis for the RNN
+        # x shape is [B, C_out, D_out, H_out, W_out]
+        x = x.permute(0, 2, 1, 3, 4)       # → [B, D_out, C_out, H_out, W_out]
+        x = x.contiguous().view(batch_size, -1, -1)  # → [B, D_out, C_out*H_out*W_out]
+        
+        # Process with GRU
+        x, _ = self.rnn(x)  # Output shape: [batch_size, 1, rnn_hidden_size]
+        
+        # Remove the sequence dimension
+        x = x.squeeze(1)  # Shape becomes [batch_size, rnn_hidden_size]
         
         # Fully connected layers
         x = self.fc(x)

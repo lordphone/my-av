@@ -56,12 +56,12 @@ class DataPreprocessor:
         speed_for_frames = np.interp(frame_times, speed_times, speed_values)
 
         # Preform frame skipping to take every other frame
-        frames = frames[::2]
-        steering_for_frames = steering_for_frames[::2]
-        speed_for_frames = speed_for_frames[::2]
+        frames = frames[::3]
+        steering_for_frames = steering_for_frames[::3]
+        speed_for_frames = speed_for_frames[::3]
 
         # Pad frames, steering, and speed data to ensure all videos are 1200 frames long
-        target_length = 600
+        target_length = 400
 
         # Pad frames
         current_len = len(frames)

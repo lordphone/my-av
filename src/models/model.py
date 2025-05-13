@@ -1,87 +1,96 @@
 # model.py
 # Defines the neural network architecture
-# A 3D CNN model for processing video data
+# A 2D CNN model for processing video data, with a RNN for temporal processing
 
 import torch
 import torch.nn as nn
 import torchvision.models as models
 
 class Model(nn.Module):
-    def __init__(self, window_size=15):
+    def __init__(self, num_steering_outputs=1, cnn_feature_dim_expected=512, rnn_hidden_size=256, rnn_num_layers=2):
         super(Model, self).__init__()
-        
-        # Use 3D convolutions for temporal processing
-        self.conv3d = nn.Sequential(
-            nn.Conv3d(3, 64, kernel_size=(3, 7, 7), stride=(1, 2, 2), padding=(1, 3, 3)),
-            nn.BatchNorm3d(64),
-            nn.ReLU(),
-            nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1)),
-            
-            nn.Conv3d(64, 128, kernel_size=(3, 3, 3), padding=(1, 1, 1)),
-            nn.BatchNorm3d(128),
-            nn.ReLU(),
-            nn.MaxPool3d(kernel_size=(2, 2, 2), stride=(2, 2, 2)),
-            
-            # More layers as needed
-        )
-        
-        # Dynamically calculate the size after convolutions
-        self._conv_output_size = None
-        
-        # Add recurrent layer - GRU
-        self.rnn_hidden_size = 256
-        self.rnn = nn.GRU(
-            input_size=self.get_conv_output_size((3, window_size, 160, 320)),
-            hidden_size=self.rnn_hidden_size,
-            batch_first=True,
-            num_layers=1
-        )
-        
-        # Fully connected layers - now take input from RNN instead of CNN
-        self.fc = nn.Sequential(
-            nn.Linear(self.rnn_hidden_size, 512),
-            nn.ReLU(),
-            nn.Dropout(0.5)
-        )
-        
-        # Output heads
-        self.steering_head = nn.Linear(512, 1) # Single output for current steering
-        self.speed_head = nn.Linear(512, 1) # Single output for current speed
 
-    def get_conv_output_size(self, input_shape):
-        if self._conv_output_size is None:
-            with torch.no_grad():
-                dummy_input = torch.zeros(1, *input_shape)  # Batch size of 1
-                output = self.conv3d(dummy_input)
-                self._conv_output_size = int(torch.prod(torch.tensor(output.shape[1:])))
-        return self._conv_output_size
+        # Load a pre-trained ResNet18 model
+        self.cnn_backbone = models.resnet18(pretrained=True)
+
+        # Remove the final fully connected layer (classification layer)
+        # The fully connected layer in ResNet18 is named 'fc'
+        self.cnn_feature_dim = self.cnn_backbone.fc.in_features
+        
+        if self.cnn_feature_dim != cnn_feature_dim_expected:
+            # This might happen if a different ResNet version is used or future torchvision changes.
+            # For now, we'll proceed but a warning or handling might be good in a production system.
+            print(f"Warning: ResNet18 fc.in_features is {self.cnn_feature_dim}, expected {cnn_feature_dim_expected}. Using actual value.")
+
+        self.cnn_backbone.fc = nn.Identity() # Replace with an identity layer
+
+        # GRU for temporal processing
+        self.temporal_model = nn.GRU(
+            input_size=self.cnn_feature_dim,  # Features from CNN
+            hidden_size=rnn_hidden_size,    # Size of GRU's memory
+            num_layers=rnn_num_layers,      # Number of stacked GRU layers
+            batch_first=True,               # Input tensor format: (batch, seq, feature)
+            dropout=0.2 if rnn_num_layers > 1 else 0 # Add dropout if using multiple GRU layers
+        )
+        
+        # Fully connected layer to map GRU output to steering angle prediction
+        self.output_layer = nn.Linear(rnn_hidden_size, num_steering_outputs)
+
 
     def forward(self, x):
-        batch_size = x.size(0)
+        # x is expected to be a batch of frame sequences: (batch_size, sequence_length, C, H, W)
         
-        # x shape: [batch_size, sequence_length, channels, height, width]
-        # Rearrange to [batch_size, channels, sequence_length, height, width]
-        x = x.permute(0, 2, 1, 3, 4)
+        batch_size, seq_len, C, H, W = x.shape
         
-        # Process with 3D convolutions
-        x = self.conv3d(x)
+        # Reshape to process frames independently by the CNN
+        cnn_in = x.view(batch_size * seq_len, C, H, W)
         
-        # keep the time axis for the RNN
-        # x shape is [B, C_out, D_out, H_out, W_out]
-        x = x.permute(0, 2, 1, 3, 4)       # → [B, D_out, C_out, H_out, W_out]
-        x = x.contiguous().view(batch_size, -1, -1)  # → [B, D_out, C_out*H_out*W_out]
+        # Pass through CNN backbone
+        # cnn_out_features shape: (batch_size * seq_len, self.cnn_feature_dim)
+        cnn_out_features = self.cnn_backbone(cnn_in) 
         
-        # Process with GRU
-        x, _ = self.rnn(x)  # Output shape: [batch_size, 1, rnn_hidden_size]
+        # Reshape back to sequence for GRU
+        # rnn_in shape: (batch_size, seq_len, self.cnn_feature_dim)
+        rnn_in = cnn_out_features.view(batch_size, seq_len, self.cnn_feature_dim)
         
-        # Remove the sequence dimension
-        x = x.squeeze(1)  # Shape becomes [batch_size, rnn_hidden_size]
+        # Pass through GRU
+        # gru_out shape: (batch_size, seq_len, rnn_hidden_size) - output for each time step
+        # hidden_state shape: (rnn_num_layers, batch_size, rnn_hidden_size) - final hidden state
+        gru_out, _ = self.temporal_model(rnn_in) # We don't need the final hidden state separately for this common setup
         
-        # Fully connected layers
-        x = self.fc(x)
+        # We'll use the output from the last time step of the GRU to make the prediction
+        # This means "make a decision after seeing the whole relevant sequence"
+        # last_time_step_features shape: (batch_size, rnn_hidden_size)
+        last_time_step_features = gru_out[:, -1, :]
         
-        # Output heads
-        steering = self.steering_head(x)
-        speed = self.speed_head(x)
+        # Pass through the final output layer
+        # steering_prediction shape: (batch_size, num_steering_outputs)
+        steering_prediction = self.output_layer(last_time_step_features)
         
-        return steering, speed
+        return steering_prediction
+
+# Example usage (for testing the model structure)
+if __name__ == '__main__':
+    # Create a dummy input tensor: batch_size=2, sequence_length=10, C=3, H=224, W=224
+    # The DataPreprocessor uses img_size=(160, 320). ResNet typically expects 224x224 or similar.
+    # Ensure your preprocessor output matches what the CNN expects, or add adaptive pooling.
+    dummy_input = torch.randn(2, 10, 3, 160, 320) # Adjusted to match preprocessor typical output
+    
+    # Model hyperparameters (can be tuned)
+    num_outputs = 1 # e.g., 1 for steering angle
+    cnn_features = 512 # Expected from ResNet18
+    rnn_hidden = 256
+    rnn_layers = 2
+
+    model = Model(
+        num_steering_outputs=num_outputs,
+        cnn_feature_dim_expected=cnn_features,
+        rnn_hidden_size=rnn_hidden,
+        rnn_num_layers=rnn_layers
+    )
+    
+    # Test the forward pass
+    predictions = model(dummy_input)
+    print("Output prediction shape:", predictions.shape) # Expected: (batch_size, num_outputs), e.g., (2, 1)
+    print("A few dummy predictions:", predictions)
+    

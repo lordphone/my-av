@@ -5,13 +5,14 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
+from torchvision.models import ResNet18_Weights
 
 class Model(nn.Module):
-    def __init__(self, num_steering_outputs=1, cnn_feature_dim_expected=512, rnn_hidden_size=256, rnn_num_layers=2):
+    def __init__(self, num_steering_outputs=1, num_speed_outputs=1, cnn_feature_dim_expected=512, rnn_hidden_size=256, rnn_num_layers=2):
         super(Model, self).__init__()
 
         # Load a pre-trained ResNet18 model
-        self.cnn_backbone = models.resnet18(pretrained=True)
+        self.cnn_backbone = models.resnet18(weights=ResNet18_Weights.DEFAULT)
 
         # Remove the final fully connected layer (classification layer)
         # The fully connected layer in ResNet18 is named 'fc'
@@ -34,8 +35,8 @@ class Model(nn.Module):
         )
         
         # Fully connected layer to map GRU output to steering angle prediction
-        self.output_layer = nn.Linear(rnn_hidden_size, num_steering_outputs)
-
+        self.steering_output_layer = nn.Linear(rnn_hidden_size, num_steering_outputs)
+        self.speed_output_layer = nn.Linear(rnn_hidden_size, num_speed_outputs)
 
     def forward(self, x):
         # x is expected to be a batch of frame sequences: (batch_size, sequence_length, C, H, W)
@@ -65,9 +66,10 @@ class Model(nn.Module):
         
         # Pass through the final output layer
         # steering_prediction shape: (batch_size, num_steering_outputs)
-        steering_prediction = self.output_layer(last_time_step_features)
+        steering_prediction = self.steering_output_layer(last_time_step_features)
+        speed_prediction = self.speed_output_layer(last_time_step_features)
         
-        return steering_prediction
+        return steering_prediction, speed_prediction
 
 # Example usage (for testing the model structure)
 if __name__ == '__main__':
@@ -90,7 +92,9 @@ if __name__ == '__main__':
     )
     
     # Test the forward pass
-    predictions = model(dummy_input)
-    print("Output prediction shape:", predictions.shape) # Expected: (batch_size, num_outputs), e.g., (2, 1)
-    print("A few dummy predictions:", predictions)
+    steering, speed = model(dummy_input)
+    print("Steering prediction shape:", steering.shape)
+    print("Speed prediction shape:", speed.shape)
+    print("Steering prediction:", steering)
+    print("Speed prediction:", speed)
     

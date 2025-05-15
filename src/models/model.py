@@ -74,8 +74,6 @@ class Model(nn.Module):
 # Example usage (for testing the model structure)
 if __name__ == '__main__':
     # Create a dummy input tensor: batch_size=2, sequence_length=10, C=3, H=224, W=224
-    # The DataPreprocessor uses img_size=(160, 320). ResNet typically expects 224x224 or similar.
-    # Ensure your preprocessor output matches what the CNN expects, or add adaptive pooling.
     dummy_input = torch.randn(2, 10, 3, 160, 320) # Adjusted to match preprocessor typical output
     
     # Model hyperparameters (can be tuned)

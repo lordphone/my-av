@@ -8,7 +8,7 @@ class TestDataPreprocessor(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         """Set up test fixtures - run preprocessing once and store the results for all tests"""
-        self.data_preprocessor = DataPreprocessor(img_size=(480, 640))
+        self.data_preprocessor = DataPreprocessor(img_size=(240, 320))
         self.segment_data = {
             'video_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.hevc',
             'log_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/processed_log',
@@ -22,7 +22,7 @@ class TestDataPreprocessor(unittest.TestCase):
         """Test that the preprocessor creates tensors with the correct shape"""
         # Check dimensions of frames tensor
         self.assertEqual(len(self.frames_tensor.shape), 4, "Frames tensor should be 4-dimensional [frames, channels, height, width]")
-        self.assertEqual(self.frames_tensor.shape[1:], (3, 480, 640), "Frame dimensions should match the specified img_size")
+        self.assertEqual(self.frames_tensor.shape[1:], (3, 240, 320), "Frame dimensions should match the specified img_size")
 
         # Check dimensions of steering and speed tensors
         self.assertEqual(len(self.steering_tensor.shape), 1, "Steering tensor should be 1-dimensional")

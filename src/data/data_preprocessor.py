@@ -8,7 +8,7 @@ import torch
 from torchvision import transforms
 
 class DataPreprocessor:
-    def __init__(self, img_size=(160, 320)):
+    def __init__(self, img_size=(480, 640)):
         self.img_size = img_size
         self.transform = transforms.Compose([
             transforms.ToPILImage(),

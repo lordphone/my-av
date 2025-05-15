@@ -33,6 +33,7 @@ console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(
 logging.getLogger().addHandler(console_handler)
 
 from torch.utils.data import DataLoader
+from torch.amp import GradScaler, autocast
 from src.data.comma2k19dataset import Comma2k19Dataset
 from src.data.processed_dataset import ProcessedDataset
 from src.models.model import Model
@@ -51,7 +52,7 @@ def train_model(
     checkpoint_dir="checkpoints", # Directory to save checkpoints
     resume_from=None, # Path to resume from checkpoint
     window_size=15, 
-    batch_size=8, 
+    batch_size=16, 
     num_epochs=30, 
     lr=0.0001):
     # Set device
@@ -107,14 +108,18 @@ def train_model(
         processed_dataset, 
         batch_size=batch_size, 
         sampler=ChunkShufflingSampler(processed_dataset, video_indices=train_videos_indices, shuffle=True), 
-        num_workers=4, 
+        num_workers=16, 
+        persistent_workers=True,
+        # prefetch_factor=3,
         pin_memory=True
     )
     val_loader = DataLoader(
         processed_dataset, 
         batch_size=batch_size, 
         sampler=ChunkShufflingSampler(processed_dataset, video_indices=val_videos_indices, shuffle=True), 
-        num_workers=4, 
+        num_workers=16, 
+        persistent_workers=True,
+        # prefetch_factor=3,
         pin_memory=True
     )
 
@@ -149,6 +154,9 @@ def train_model(
 
     # Gradient clipping
     max_grad_norm = 1.0
+
+    # Mixed precision training
+    scaler = GradScaler()
 
     # --- Checkpoint Loading ---
     start_epoch = 0
@@ -216,20 +224,21 @@ def train_model(
             current_steering = steering[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
             current_speed = speed[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
 
-            # Forward pass
-            steering_pred, speed_pred = model(frames)
+            # Forward pass with mixed precision
+            with autocast(device_type='cuda'):
+                steering_pred, speed_pred = model(frames)
+                loss_steering = criterion_steering(steering_pred, current_steering)
+                loss_speed = criterion_speed(speed_pred, current_speed)
+                loss = steering_weight * loss_steering + speed_weight * loss_speed
 
-            # Compute loss - now comparing single predictions with the last frame's values
-            loss_steering = criterion_steering(steering_pred, current_steering)
-            loss_speed = criterion_speed(speed_pred, current_speed)
-            loss = steering_weight * loss_steering + speed_weight * loss_speed
-            
-            # Backward pass and optimization
+            # Backward pass and optimization with scaler
             optimizer.zero_grad()
-            loss.backward()
-            # Add gradient clipping
+            scaler.scale(loss).backward()
+            # Apply gradient clipping to unscaled gradients
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
 
             running_loss += loss.item()
 

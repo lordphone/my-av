@@ -117,8 +117,7 @@ class TestFrameReader(unittest.TestCase):
         import time
         
         start_time = time.time()
-        for _ in self.reader:
-            pass
+        frames = self.reader.get_frames(0, self.reader.num_frames)
         elapsed_time = time.time() - start_time
         print(f"Time taken to read the video: {elapsed_time:.2f} seconds")
 

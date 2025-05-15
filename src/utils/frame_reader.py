@@ -11,7 +11,7 @@ class FrameReader:
     - Checking for CUDA availability and using it for hardware acceleration if possible.
     - Using ffmpeg to read frames in batches instead of one at a time.
     """
-    def __init__(self, video_path, use_cuda=False, batch_size=100):
+    def __init__(self, video_path, use_cuda=False, batch_size=400):
         self.video_path = video_path
         self.use_cuda = use_cuda and self._is_cuda_available()
         self.batch_frames = None

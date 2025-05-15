@@ -20,7 +20,7 @@ class TestTrainModel(unittest.TestCase):
             dataset_size = len(dataset)
             print(f"Training on {dataset_size} videos.")
             start_time = time.time()
-            model = train_model(self.dataset_path, window_size=10, batch_size=8, num_epochs=2, lr=0.001)
+            model = train_model(self.dataset_path, window_size=15, batch_size=8, num_epochs=2, lr=0.0001)
             self.assertIsNotNone(model, "Model should not be None after training.")
             saved_model_path = 'models/best_model.pth'
             self.assertTrue(os.path.exists(saved_model_path), "Best model file should be saved.")

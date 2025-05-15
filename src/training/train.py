@@ -50,10 +50,10 @@ def train_model(
     dataset_path, 
     checkpoint_dir="checkpoints", # Directory to save checkpoints
     resume_from=None, # Path to resume from checkpoint
-    window_size=10, 
+    window_size=15, 
     batch_size=8, 
     num_epochs=30, 
-    lr=0.001):
+    lr=0.0001):
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -135,13 +135,13 @@ def train_model(
     #     print(f"Batch {i}: {batch['frames'].shape}, {batch['steering'].shape}, {batch['speed'].shape}")
 
     # Initialize model
-    model = Model(window_size=window_size).to(device)
+    model = Model().to(device)
 
     # Define loss function and optimizer
     criterion_steering = nn.MSELoss()
     criterion_speed = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)  # Reduced learning rate
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    optimizer = optim.Adam(model.parameters(), lr)  # Reduced learning rate
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
     # Loss weights
     steering_weight = 1.0
@@ -310,24 +310,8 @@ def train_model(
     return model
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description='Train a model with checkpointing.')
-    parser.add_argument('--data_path', type=str, default="/home/lordphone/my-av/data/raw/comma2k19", help='Path to the dataset.')
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='Directory to save checkpoints.')
-    parser.add_argument('--resume_from', type=str, default='checkpoints/latest_checkpoint.pth', help='Path to checkpoint file to resume training from (e.g., checkpoints/latest_checkpoint.pth).')
-    parser.add_argument('--window_size', type=int, default=10, help='Sequence length for model input.')
-    parser.add_argument('--batch_size', type=int, default=8, help='Training batch size.')
-    parser.add_argument('--num_epochs', type=int, default=30, help='Number of training epochs.')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate.')
-
-    args = parser.parse_args()
-
+    # Use direct function call with default parameters
     train_model(
-        dataset_path=args.data_path,
-        checkpoint_dir=args.checkpoint_dir,
-        resume_from=args.resume_from,
-        window_size=args.window_size,
-        batch_size=args.batch_size,
-        num_epochs=args.num_epochs,
-        lr=args.lr
+        dataset_path="/home/lordphone/my-av/data/raw/comma2k19"
+        # All other parameters will use defaults defined in the function
     )

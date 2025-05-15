@@ -1,6 +1,6 @@
 # model.py
 # Defines the neural network architecture
-# A 2D CNN model for processing video data, with a RNN for temporal processing
+# A 2D CNN model for processing video data, with a GRU for temporal processing
 
 import torch
 import torch.nn as nn

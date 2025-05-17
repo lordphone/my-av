@@ -2,6 +2,7 @@ import unittest
 import torch
 import os
 import numpy as np
+import time
 from src.data.data_preprocessor import DataPreprocessor
 
 class TestDataPreprocessor(unittest.TestCase):
@@ -81,6 +82,13 @@ class TestDataPreprocessor(unittest.TestCase):
         self.assertEqual(self.frames_tensor.shape[0], target_length, "Frames should be padded to the target length")
         self.assertEqual(len(self.steering_tensor), target_length, "Steering should be padded to the target length")
         self.assertEqual(len(self.speed_tensor), target_length, "Speed should be padded to the target length")
+    
+    def test_speed(self):
+        """Test how long it takes to preprocess a segment"""
+        start_time = time.time()
+        self.data_preprocessor.preprocess_segment(self.segment_data)
+        end_time = time.time()
+        print(f"Time taken to preprocess a segment: {end_time - start_time} seconds")
 
 if __name__ == "__main__":
     unittest.main()

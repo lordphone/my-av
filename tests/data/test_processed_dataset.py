@@ -34,5 +34,16 @@ class TestProcessedDataset(unittest.TestCase):
             break
         end_time = time.time()
         print(f"Data loading time: {end_time - start_time:.4f} seconds")
+    
+    def test_speed(self):
+        """Test how long it takes to load a single segment or video"""
+        processed_dataset = ProcessedDataset(self.base_dataset, window_size=self.window_size, target_length=self.target_length)
+        start_time = time.time()
+        processed_dataset[0]
+        # for i in range(len(processed_dataset)):
+        #     processed_dataset[i]
+        end_time = time.time()
+        print(f"Time taken to load a single segment: {end_time - start_time:.4f} seconds")
+
 if __name__ == '__main__':
     unittest.main()

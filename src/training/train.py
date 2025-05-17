@@ -1,6 +1,5 @@
 # train.py
 # training script
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,6 +13,10 @@ import datetime
 import logging
 import time
 import gc
+
+# Set multiprocessing start method to 'spawn' for CUDA compatibility
+# This must be done at the module level before creating any DataLoaders
+torch.multiprocessing.set_start_method('spawn', force=True)
 
 # Update logging configuration to save logs in a dedicated 'logs' directory
 log_dir = "logs"  # Directory to save training logs
@@ -37,8 +40,8 @@ from torch.amp import GradScaler, autocast
 from src.data.comma2k19dataset import Comma2k19Dataset
 from src.data.processed_dataset import ProcessedDataset
 from src.models.model import Model
-from src.data.chunk_shuffling_sampler import ChunkShufflingSampler
-
+from src.data.video_batch_sampler import VideoBatchSampler
+from src.data.video_window_dataset import VideoWindowIterableDataset
 from collections import OrderedDict
 
 # Function to save checkpoints
@@ -54,7 +57,8 @@ def train_model(
     window_size=15, 
     batch_size=16, 
     num_epochs=30, 
-    lr=0.0001):
+    lr=0.0001,
+    debug=False):  # Add debug flag
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -77,8 +81,11 @@ def train_model(
 
     # Group dataset by video
     video_indices = data_utils.get_video_indices(processed_dataset)  # Assuming this method exists
+    random.seed(42)  # Fixed seed for reproducibility when using checkpoints
     random.shuffle(video_indices)  # Shuffle videos
-    # print(f"Video indices: {video_indices}")  # Print video indices
+    
+    if debug:
+        print(f"Total number of videos: {len(video_indices)}")
 
     # Split videos into train and validation sets
     num_videos = len(video_indices)
@@ -86,40 +93,30 @@ def train_model(
     split_index = int(num_videos * split_ratio)
     train_videos_indices = video_indices[:split_index]
     val_videos_indices = video_indices[split_index:]
-    # print(f"Train videos: {train_videos_indices}")  # Print train videos
-    # print(f"Validation videos: {val_videos_indices}")  # Print validation videos
+    
+    if debug:
+        print(f"Train videos: {len(train_videos_indices)}, Val videos: {len(val_videos_indices)}")
 
-    """ Unfinished implementation of seperating dataset into train and validation sets, for now feeding the entire dataset into the model"""
-    # # Create a mapping of video indices to dataset indices
-    # train_indices = [idx for indices in data_utils.group_by_video(processed_dataset, train_videos_indices).values() for idx in indices]
-    # val_indices = [idx for indices in data_utils.group_by_video(processed_dataset, val_videos_indices).values() for idx in indices]
-    # print(f"Train indices: {train_indices}")  # Print train indices
-    # print(f"Validation indices: {val_indices}")  # Print validation indices
-
-    # # Create Subset datasets
-    # train_dataset = torch.utils.data.Subset(processed_dataset, train_indices)
-    # val_dataset = torch.utils.data.Subset(processed_dataset, val_indices)
-    # print(f"Train dataset: {train_dataset}")  # Print train dataset
-    # print(f"Validation dataset: {val_dataset}")  # Print validation dataset
-    # print(f"Training dataset size: {len(train_dataset)}")
-    # print(f"Validation dataset size: {len(val_dataset)}")
+    # Number of workers to use for data loading
+    num_workers = 4  # Adjust based on your system's CPU cores
+    
+    # Create DataLoaders with batch samplers
+    train_dataset = VideoWindowIterableDataset(processed_dataset, video_indices=train_videos_indices, shuffle=True)
+    val_dataset = VideoWindowIterableDataset(processed_dataset, video_indices=val_videos_indices, shuffle=True)
 
     train_loader = DataLoader(
-        processed_dataset, 
-        batch_size=batch_size, 
-        sampler=ChunkShufflingSampler(processed_dataset, video_indices=train_videos_indices, shuffle=True), 
-        num_workers=16, 
+        train_dataset,
+        batch_size=batch_size,  # Now works as expected
+        num_workers=num_workers,
         persistent_workers=True,
-        # prefetch_factor=3,
         pin_memory=True
     )
+
     val_loader = DataLoader(
-        processed_dataset, 
-        batch_size=batch_size, 
-        sampler=ChunkShufflingSampler(processed_dataset, video_indices=val_videos_indices, shuffle=True), 
-        num_workers=16, 
+        val_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
         persistent_workers=True,
-        # prefetch_factor=3,
         pin_memory=True
     )
 
@@ -208,6 +205,10 @@ def train_model(
     # Training loop
     logging.info(f"Starting training for {num_epochs} epochs.")
 
+    # Log training start
+    if debug:
+        logging.info(f"Starting training with {num_workers} workers")
+
     # --- Training Phase ---
     for epoch in range(start_epoch, num_epochs):
         epoch_start_time = time.time()
@@ -215,11 +216,21 @@ def train_model(
         model.train()
         running_loss = 0.0
 
+        # For profiling data loading vs model training
+        total_data_loading_time = 0
+        total_model_time = 0
+
         for i, batch in enumerate(train_loader):
+            # Start timing data loading
+            data_loading_end_time = time.time()
+            
             frames = batch['frames'].to(device)  # Shape: [batch_size, window_length, 3, 160, 320]
             steering = batch['steering'].to(device)  # Shape: [batch_size, window_length]
             speed = batch['speed'].to(device)  # Shape: [batch_size, window_length]
 
+            # Data loading finished, now start timing model computation
+            model_start_time = time.time()
+            
             # Get only the last frame's ground truth values (current frame we're predicting)
             current_steering = steering[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
             current_speed = speed[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
@@ -240,17 +251,56 @@ def train_model(
             scaler.step(optimizer)
             scaler.update()
 
+            # End of model computation timing
+            model_end_time = time.time()
+            
+            # For the first batch, data loading time includes initialization
+            if i == 0:
+                next_data_loading_start_time = model_end_time
+            
+            # Calculate times for subsequent batches
+            if i > 0:
+                data_loading_time = data_loading_end_time - next_data_loading_start_time
+                total_data_loading_time += data_loading_time
+            
+            model_time = model_end_time - model_start_time
+            total_model_time += model_time
+            
+            # Set the start time for the next batch data loading
+            next_data_loading_start_time = model_end_time
+
             running_loss += loss.item()
 
             # Log progress every 1000 batches
             if (i + 1) % log_interval == 0:
-                            batch_time = time.time()
-                            batches_processed = i + 1
-                            total_batches = len(train_loader)
-                            time_per_batch = (batch_time - epoch_start_time) / batches_processed
-                            eta_seconds = time_per_batch * (total_batches - batches_processed)
-                            eta_formatted = str(datetime.timedelta(seconds=int(eta_seconds)))
-                            logging.info(f"Epoch [{epoch+1}/{num_epochs}] Batch [{batches_processed}/{total_batches}] - Loss: {loss.item():.4f} - ETA: {eta_formatted}")
+                batch_time = time.time()
+                batches_processed = i + 1
+                total_batches = len(train_loader)
+                time_per_batch = (batch_time - epoch_start_time) / batches_processed
+                eta_seconds = time_per_batch * (total_batches - batches_processed)
+                eta_formatted = str(datetime.timedelta(seconds=int(eta_seconds)))
+                
+                if debug and i > 0:
+                    avg_data_loading_time = total_data_loading_time / i
+                    avg_model_time = total_model_time / (i + 1)
+                    logging.info(f"Avg data loading time: {avg_data_loading_time:.4f}s, Avg model time: {avg_model_time:.4f}s")
+                    print(f"Avg data loading time: {avg_data_loading_time:.4f}s, Avg model time: {avg_model_time:.4f}s")
+                
+                logging.info(f"Epoch [{epoch+1}/{num_epochs}] Batch [{batches_processed}/{total_batches}] - Loss: {loss.item():.4f} - ETA: {eta_formatted}")
+
+        # End of epoch timing summary
+        if debug:
+            total_batches = len(train_loader)
+            if total_batches > 1:
+                avg_data_loading_time = total_data_loading_time / (total_batches - 1)  # Exclude first batch
+                avg_model_time = total_model_time / total_batches
+                data_percentage = (avg_data_loading_time / (avg_data_loading_time + avg_model_time)) * 100
+                model_percentage = (avg_model_time / (avg_data_loading_time + avg_model_time)) * 100
+                
+                logging.info(f"Epoch time breakdown - Data loading: {avg_data_loading_time:.4f}s ({data_percentage:.1f}%), Model: {avg_model_time:.4f}s ({model_percentage:.1f}%)")
+                print(f"\nEpoch time breakdown:")
+                print(f"Data loading: {avg_data_loading_time:.4f}s ({data_percentage:.1f}%)")
+                print(f"Model computation: {avg_model_time:.4f}s ({model_percentage:.1f}%)\n")
 
         # Calculate average loss for the epoch
         avg_train_loss = running_loss / len(train_loader)
@@ -319,8 +369,45 @@ def train_model(
     return model
 
 if __name__ == "__main__":
-    # Use direct function call with default parameters
-    train_model(
-        dataset_path="/home/lordphone/my-av/data/raw/comma2k19"
-        # All other parameters will use defaults defined in the function
-    )
+    import argparse
+    
+    # Set up command-line argument parsing
+    parser = argparse.ArgumentParser(description='Train the model in different modes')
+    parser.add_argument('--mode', type=str, choices=['train', 'test'], default='train',
+                        help='Training mode: "train" for real training, "test" for test training')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output')
+    parser.add_argument('--epochs', type=int, help='Number of epochs to train (default: 30 for train, 5 for test)')
+    parser.add_argument('--batch-size', type=int, default=16, help='Batch size for training')
+    parser.add_argument('--window-size', type=int, default=15, help='Window size for temporal data')
+    
+    args = parser.parse_args()
+    
+    # Set default epochs based on mode if not specified
+    if args.epochs is None:
+        if args.mode == 'train':
+            args.epochs = 30
+        else:  # test mode
+            args.epochs = 5
+    
+    # Common parameters for both modes
+    common_params = {
+        'debug': args.debug,
+        'num_epochs': args.epochs,
+        'batch_size': args.batch_size,
+        'window_size': args.window_size
+    }
+    
+    if args.mode == 'train':
+        # Real training mode - use full dataset
+        print(f"Starting real training mode with full dataset (epochs: {args.epochs})")
+        train_model(
+            dataset_path="/home/lordphone/my-av/data/raw/comma2k19",
+            **common_params
+        )
+    else:
+        # Test training mode - use test dataset
+        print(f"Starting test training mode with test dataset (epochs: {args.epochs})")
+        train_model(
+            dataset_path="/home/lordphone/my-av/tests/data",
+            **common_params
+        )

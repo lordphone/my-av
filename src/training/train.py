@@ -161,7 +161,7 @@ def train_model(
     if resume_from and os.path.isfile(resume_from):
         logging.info(f"Loading checkpoint from {resume_from}")
         # Load checkpoint on the CPU first
-        checkpoint = torch.load(resume_from, map_location='cpu')
+        checkpoint = torch.load(resume_from, map_location='cpu')is there 
 
         # Load model state
         model_state_dict = checkpoint['model_state_dict']
@@ -182,7 +182,7 @@ def train_model(
         # Load optimizer state
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         # Manually move the optimizer state to the correct device
-        for state in optimizer.state.values():
+        for state in optimizer.state.values():is there 
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(device)
@@ -224,7 +224,7 @@ def train_model(
             # Start timing data loading
             data_loading_end_time = time.time()
             
-            frames = batch['frames'].to(device)  # Shape: [batch_size, window_length, 3, 160, 320]
+            frames = batch['frames'].to(device)  # Shape: [batch_size, window_length, 3, 240, 320]
             steering = batch['steering'].to(device)  # Shape: [batch_size, window_length]
             speed = batch['speed'].to(device)  # Shape: [batch_size, window_length]
 
@@ -280,13 +280,16 @@ def train_model(
                 eta_seconds = time_per_batch * (total_batches - batches_processed)
                 eta_formatted = str(datetime.timedelta(seconds=int(eta_seconds)))
                 
+                # Calculate current average loss
+                current_avg_loss = running_loss / batches_processed
+                
                 if debug and i > 0:
                     avg_data_loading_time = total_data_loading_time / i
                     avg_model_time = total_model_time / (i + 1)
                     logging.info(f"Avg data loading time: {avg_data_loading_time:.4f}s, Avg model time: {avg_model_time:.4f}s")
                     print(f"Avg data loading time: {avg_data_loading_time:.4f}s, Avg model time: {avg_model_time:.4f}s")
                 
-                logging.info(f"Epoch [{epoch+1}/{num_epochs}] Batch [{batches_processed}/{total_batches}] - Loss: {loss.item():.4f} - ETA: {eta_formatted}")
+                logging.info(f"Epoch [{epoch+1}/{num_epochs}] Batch [{batches_processed}/{total_batches}] - Batch Loss: {loss.item():.4f} - Avg Loss: {current_avg_loss:.4f} - ETA: {eta_formatted}")
 
         # End of epoch timing summary
         if debug:
@@ -304,6 +307,39 @@ def train_model(
 
         # Calculate average loss for the epoch
         avg_train_loss = running_loss / len(train_loader)
+        
+        # Decompose losses for more detailed monitoring
+        with torch.no_grad():
+            model.eval()
+            detailed_samples = min(100, len(train_loader))  # Limit to 100 batches for speed
+            steering_loss_sum = 0.0
+            speed_loss_sum = 0.0
+            
+            for i, batch in enumerate(train_loader):
+                if i >= detailed_samples:
+                    break
+                    
+                frames = batch['frames'].to(device)
+                steering = batch['steering'].to(device)
+                speed = batch['speed'].to(device)
+                current_steering = steering[:, -1].unsqueeze(1)
+                current_speed = speed[:, -1].unsqueeze(1)
+                
+                steering_pred, speed_pred = model(frames)
+                
+                # Get individual losses
+                steering_loss = criterion_steering(steering_pred, current_steering).item()
+                speed_loss = criterion_speed(speed_pred, current_speed).item()
+                
+                steering_loss_sum += steering_loss
+                speed_loss_sum += speed_loss
+            
+            avg_steering_loss = steering_loss_sum / detailed_samples
+            avg_speed_loss = speed_loss_sum / detailed_samples
+        
+        # Log individual loss components
+        logging.info(f"Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
+        print(f"Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
         # --- End of Training Phase ---
 
         # --- Validation Phase ---
@@ -341,16 +377,19 @@ def train_model(
         # Print each epoch summary
         epoch_time = time.time() - epoch_start_time
         print(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
-        print(f"Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}")
+        print(f"Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}")
+        print(f"Total Train Loss: {running_loss:.4f}, Total Val Loss: {val_loss:.4f}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
-        logging.info(f"Training Loss: {running_loss:.4f}, Validation Loss: {val_loss:.4f}")
+        logging.info(f"Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}")
+        logging.info(f"Total Train Loss: {running_loss:.4f}, Total Val Loss: {val_loss:.4f}")
 
         # --- Checkpoint Saving ---
         is_best = avg_val_loss < best_val_loss
         if is_best:
             best_val_loss = avg_val_loss
             best_model_path = os.path.join(model_dir, 'best_model.pth')
-            logging.info(f"New best model found! Saving to {best_model_path}")
+            logging.info(f"New best model found! Avg Val Loss: {avg_val_loss:.4f} (previous best: {best_val_loss if epoch > 0 else 'N/A'})")
+            print(f"New best model found! Avg Val Loss: {avg_val_loss:.4f}")
             torch.save(model.state_dict(), best_model_path)
         
         # Save the latest checkpoint including optimizer state etc.
@@ -385,7 +424,7 @@ if __name__ == "__main__":
     # Set default epochs based on mode if not specified
     if args.epochs is None:
         if args.mode == 'train':
-            args.epochs = 30
+            args.epochs = 50
         else:  # test mode
             args.epochs = 5
     

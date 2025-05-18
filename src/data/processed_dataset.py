@@ -6,7 +6,7 @@ from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
     def __init__(self, base_dataset, window_size=15, target_length=600):
-        self.max_cache_size = 2
+        self.max_cache_size = 1
         self.base_dataset = base_dataset
         self.preprocessor = DataPreprocessor()
         self.window_size = window_size

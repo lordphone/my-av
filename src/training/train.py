@@ -400,8 +400,20 @@ if __name__ == "__main__":
     if args.mode == 'train':
         # Real training mode - use full dataset
         print(f"Starting real training mode with full dataset (epochs: {args.epochs})")
+        
+        # Check for existing checkpoint
+        checkpoint_dir = "checkpoints"
+        latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
+        resume_from = latest_checkpoint_path if os.path.exists(latest_checkpoint_path) else None
+        
+        if resume_from:
+            print(f"Resuming training from checkpoint: {resume_from}")
+        else:
+            print("No checkpoint found. Starting training from scratch.")
+        
         train_model(
             dataset_path="/home/lordphone/my-av/data/raw/comma2k19",
+            resume_from=resume_from,
             **common_params
         )
     else:

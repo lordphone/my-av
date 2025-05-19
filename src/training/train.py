@@ -61,7 +61,6 @@ def train_model(
     debug=False):  # Add debug flag
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
     logging.info(f"Using device: {device}")
 
     # Create checkpoint directory if it doesn't exist
@@ -85,7 +84,7 @@ def train_model(
     random.shuffle(video_indices)  # Shuffle videos
     
     if debug:
-        print(f"Total number of videos: {len(video_indices)}")
+        logging.info(f"Total number of videos: {len(video_indices)}")
 
     # Split videos into train and validation sets
     num_videos = len(video_indices)
@@ -95,7 +94,7 @@ def train_model(
     val_videos_indices = video_indices[split_index:]
     
     if debug:
-        print(f"Train videos: {len(train_videos_indices)}, Val videos: {len(val_videos_indices)}")
+        logging.info(f"Train videos: {len(train_videos_indices)}, Val videos: {len(val_videos_indices)}")
 
     # Number of workers to use for data loading
     num_workers = 4  # Adjust based on your system's CPU cores
@@ -161,7 +160,7 @@ def train_model(
     if resume_from and os.path.isfile(resume_from):
         logging.info(f"Loading checkpoint from {resume_from}")
         # Load checkpoint on the CPU first
-        checkpoint = torch.load(resume_from, map_location='cpu')is there 
+        checkpoint = torch.load(resume_from, map_location='cpu')
 
         # Load model state
         model_state_dict = checkpoint['model_state_dict']
@@ -182,7 +181,7 @@ def train_model(
         # Load optimizer state
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         # Manually move the optimizer state to the correct device
-        for state in optimizer.state.values():is there 
+        for state in optimizer.state.values():
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(device)
@@ -287,7 +286,6 @@ def train_model(
                     avg_data_loading_time = total_data_loading_time / i
                     avg_model_time = total_model_time / (i + 1)
                     logging.info(f"Avg data loading time: {avg_data_loading_time:.4f}s, Avg model time: {avg_model_time:.4f}s")
-                    print(f"Avg data loading time: {avg_data_loading_time:.4f}s, Avg model time: {avg_model_time:.4f}s")
                 
                 logging.info(f"Epoch [{epoch+1}/{num_epochs}] Batch [{batches_processed}/{total_batches}] - Batch Loss: {loss.item():.4f} - Avg Loss: {current_avg_loss:.4f} - ETA: {eta_formatted}")
 
@@ -301,12 +299,9 @@ def train_model(
                 model_percentage = (avg_model_time / (avg_data_loading_time + avg_model_time)) * 100
                 
                 logging.info(f"Epoch time breakdown - Data loading: {avg_data_loading_time:.4f}s ({data_percentage:.1f}%), Model: {avg_model_time:.4f}s ({model_percentage:.1f}%)")
-                print(f"\nEpoch time breakdown:")
-                print(f"Data loading: {avg_data_loading_time:.4f}s ({data_percentage:.1f}%)")
-                print(f"Model computation: {avg_model_time:.4f}s ({model_percentage:.1f}%)\n")
 
         # Calculate average loss for the epoch
-        avg_train_loss = running_loss / len(train_loader)
+        avg_train_loss = running_loss / len(train_loader) / batch_size
         
         # Decompose losses for more detailed monitoring
         with torch.no_grad():
@@ -339,7 +334,6 @@ def train_model(
         
         # Log individual loss components
         logging.info(f"Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
-        print(f"Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
         # --- End of Training Phase ---
 
         # --- Validation Phase ---
@@ -368,17 +362,14 @@ def train_model(
                 val_loss += loss.item()
 
         # Calculate average validation loss
-        avg_val_loss = val_loss / len(val_loader)
+        avg_val_loss = val_loss / len(val_loader) / batch_size
         # --- End of Validation Phase ---
 
         # Update learning rate
         scheduler.step(avg_val_loss)
 
-        # Print each epoch summary
+        # Log epoch summary
         epoch_time = time.time() - epoch_start_time
-        print(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
-        print(f"Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}")
-        print(f"Total Train Loss: {running_loss:.4f}, Total Val Loss: {val_loss:.4f}")
         logging.info(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
         logging.info(f"Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}")
         logging.info(f"Total Train Loss: {running_loss:.4f}, Total Val Loss: {val_loss:.4f}")
@@ -386,10 +377,9 @@ def train_model(
         # --- Checkpoint Saving ---
         is_best = avg_val_loss < best_val_loss
         if is_best:
-            best_val_loss = avg_val_loss
             best_model_path = os.path.join(model_dir, 'best_model.pth')
             logging.info(f"New best model found! Avg Val Loss: {avg_val_loss:.4f} (previous best: {best_val_loss if epoch > 0 else 'N/A'})")
-            print(f"New best model found! Avg Val Loss: {avg_val_loss:.4f}")
+            best_val_loss = avg_val_loss
             torch.save(model.state_dict(), best_model_path)
         
         # Save the latest checkpoint including optimizer state etc.
@@ -403,7 +393,6 @@ def train_model(
         }, filename=latest_checkpoint_path)
         # --- End of Checkpoint Saving ---
         
-    print("Training completed.")
     logging.info("Training completed.")
     return model
 
@@ -438,7 +427,7 @@ if __name__ == "__main__":
     
     if args.mode == 'train':
         # Real training mode - use full dataset
-        print(f"Starting real training mode with full dataset (epochs: {args.epochs})")
+        logging.info(f"Starting real training mode with full dataset (epochs: {args.epochs})")
         
         # Check for existing checkpoint
         checkpoint_dir = "checkpoints"
@@ -446,9 +435,9 @@ if __name__ == "__main__":
         resume_from = latest_checkpoint_path if os.path.exists(latest_checkpoint_path) else None
         
         if resume_from:
-            print(f"Resuming training from checkpoint: {resume_from}")
+            logging.info(f"Resuming training from checkpoint: {resume_from}")
         else:
-            print("No checkpoint found. Starting training from scratch.")
+            logging.info("No checkpoint found. Starting training from scratch.")
         
         train_model(
             dataset_path="/home/lordphone/my-av/data/raw/comma2k19",
@@ -457,7 +446,7 @@ if __name__ == "__main__":
         )
     else:
         # Test training mode - use test dataset
-        print(f"Starting test training mode with test dataset (epochs: {args.epochs})")
+        logging.info(f"Starting test training mode with test dataset (epochs: {args.epochs})")
         train_model(
             dataset_path="/home/lordphone/my-av/tests/data",
             **common_params

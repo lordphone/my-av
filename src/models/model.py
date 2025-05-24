@@ -31,7 +31,13 @@ class Model(nn.Module):
         # Replace classifier with identity
         self.cnn_backbone.fc = nn.Identity()
         # Prepare first conv to accept stacked current+past (6-channel) inputs
+        # and copy pretrained 3-channel weights to the new 6-channel layer
+        orig_conv1 = models.resnet18(weights=ResNet18_Weights.DEFAULT).conv1.weight.data
         self.cnn_backbone.conv1 = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        with torch.no_grad():
+            # copy pretrained weights to both halves of the 6-channel input
+            self.cnn_backbone.conv1.weight[:, :3, :, :] = orig_conv1
+            self.cnn_backbone.conv1.weight[:, 3:, :, :] = orig_conv1
 
         # Total features into GRU: one CNN output + vehicle state dims
         gru_input_size = self.cnn_feature_dim + num_vehicle_state_features
@@ -41,7 +47,7 @@ class Model(nn.Module):
             input_size=gru_input_size,
             hidden_size=rnn_hidden_size,
             num_layers=rnn_num_layers,
-            batch_first=False,
+            batch_first=True,
             dropout=0.2 if rnn_num_layers > 1 else 0
         )
         
@@ -50,20 +56,20 @@ class Model(nn.Module):
         self.speed_output_layer = nn.Linear(rnn_hidden_size, num_future_predictions)
 
     def forward(self, window_imgs, veh_states, hidden_state=None):
-        # window_imgs: [seq_len, batch, 6, H, W]
-        # veh_states:  [seq_len, batch, num_vehicle_state_features]
-        seq_len, batch_size, C, H, W = window_imgs.shape
-        # Batch CNN feature extraction for speed: flatten time and batch dims
-        flat_imgs = window_imgs.reshape(seq_len * batch_size, C, H, W)
-        flat_feats = self.cnn_backbone(flat_imgs)                           # [seq_len*batch, cnn_feature_dim]
-        feats = flat_feats.reshape(seq_len, batch_size, self.cnn_feature_dim)  # [seq_len, batch, cnn_feature_dim]
+        # window_imgs: [batch_size, seq_len, 6, H, W]
+        # veh_states:  [batch_size, seq_len, num_vehicle_state_features]
+        batch_size, seq_len, C, H, W = window_imgs.shape
+        # Flatten batch and time dims for CNN feature extraction
+        flat_imgs = window_imgs.reshape(batch_size * seq_len, C, H, W)
+        flat_feats = self.cnn_backbone(flat_imgs)                           # [batch*seq, cnn_feature_dim]
+        feats = flat_feats.reshape(batch_size, seq_len, self.cnn_feature_dim)  # [batch, seq_len, cnn_feature_dim]
         # Combine CNN features with vehicle states
-        seq_features = torch.cat([feats, veh_states], dim=2)               # [seq_len, batch, gru_input_size]
+        seq_features = torch.cat([feats, veh_states], dim=2)               # [batch, seq_len, gru_input_size]
 
-        # Run GRU over the full sequence
+        # Run GRU over the full sequence (batch_first=True)
         gru_out, new_hidden_state = self.temporal_model(seq_features, hidden_state)
         # Take output from last time step
-        final_feat = gru_out[-1]                                 # [batch, rnn_hidden_size]
+        final_feat = gru_out[:, -1, :]                           # [batch, rnn_hidden_size]
 
         # Map to future predictions
         steering = self.steering_output_layer(final_feat)
@@ -78,13 +84,13 @@ if __name__ == '__main__':
     num_vehicle_state_features = 2  # speed, steering
     num_future_predictions = 5
 
-    # Create dummy sequences of current and past frames
-    dummy_current = torch.randn(seq_len, batch_size, C, H, W)
-    dummy_past = torch.randn(seq_len, batch_size, C, H, W)
-    # Stack current and past frames along the channel axis (6-channel input)
-    dummy_window_imgs = torch.cat([dummy_current, dummy_past], dim=2)  # [seq_len, batch, 6, H, W]
-    # Create dummy vehicle state sequence
-    dummy_veh_states = torch.randn(seq_len, batch_size, num_vehicle_state_features)
+    # Create dummy sequences of current and past frames in batch-first order
+    dummy_current = torch.randn(batch_size, seq_len, C, H, W)
+    dummy_past    = torch.randn(batch_size, seq_len, C, H, W)
+    # Stack current and past frames along the channel axis → [B, T, 6, H, W]
+    dummy_window_imgs = torch.cat([dummy_current, dummy_past], dim=2)
+    # Create dummy vehicle state sequence [B, T, F]
+    dummy_veh_states = torch.randn(batch_size, seq_len, num_vehicle_state_features)
 
     # Model hyperparameters
     cnn_features = 512
@@ -100,9 +106,8 @@ if __name__ == '__main__':
     )
 
     # Test the forward pass
-    steering_preds, speed_preds, h_state = model(dummy_window_imgs, dummy_veh_states)
-    print(f"Steering predictions shape: {steering_preds.shape}")  # (batch_size, num_future_predictions)
-    print(f"Speed predictions shape: {speed_preds.shape}")      # (batch_size, num_future_predictions)
-    print(f"Hidden state shape: {h_state.shape}")                # (rnn_layers, batch_size, rnn_hidden)
-    print("\nSteering predictions (first item in batch):\n", steering_preds[0])
-    print("\nSpeed predictions (first item in batch):\n", speed_preds[0])
+    steering, speed, _ = model(dummy_window_imgs, dummy_veh_states)
+    print(f"Steering predictions shape: {steering.shape}")  # (batch_size, num_future_predictions)
+    print(f"Speed predictions shape: {speed.shape}")      # (batch_size, num_future_predictions)
+    print("\nSteering predictions (first item in batch):\n", steering[0])
+    print("\nSpeed predictions (first item in batch):\n", speed[0])

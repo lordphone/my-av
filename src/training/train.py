@@ -135,8 +135,14 @@ def train_model(
     # for i, batch in enumerate(train_loader):
     #     print(f"Batch {i}: {batch['frames'].shape}, {batch['steering'].shape}, {batch['speed'].shape}")
 
-    # Initialize model
-    model = Model().to(device)
+    # Initialize model with appropriate parameters for the new structure
+    # window_size=19 for 1 second of driving data
+    num_future_predictions = 5  # Number of future timesteps to predict
+    num_vehicle_state_features = 2  # Speed and steering
+    model = Model(
+        num_future_predictions=num_future_predictions,
+        num_vehicle_state_features=num_vehicle_state_features,
+    ).to(device)
 
     # Define loss function and optimizer
     criterion_steering = nn.MSELoss()
@@ -223,22 +229,31 @@ def train_model(
             # Start timing data loading
             data_loading_end_time = time.time()
             
-            frames = batch['frames'].to(device)  # Shape: [batch_size, window_length, 3, 240, 320]
-            steering = batch['steering'].to(device)  # Shape: [batch_size, window_length]
-            speed = batch['speed'].to(device)  # Shape: [batch_size, window_length]
+            frames = batch['frames'].to(device)  # Shape: [batch_size, window_size, 6, H, W]
+            steering = batch['steering'].to(device)  # Shape: [batch_size, window_size]
+            speed = batch['speed'].to(device)  # Shape: [batch_size, window_size]
+            current_steering = batch['current_steering'].to(device).unsqueeze(1)  # Shape: [batch_size, 1]
+            current_speed = batch['current_speed'].to(device).unsqueeze(1)  # Shape: [batch_size, 1]
+            
+            # Create vehicle state tensor by combining speed and steering
+            veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]
 
             # Data loading finished, now start timing model computation
             model_start_time = time.time()
-            
-            # Get only the last frame's ground truth values (current frame we're predicting)
-            current_steering = steering[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
-            current_speed = speed[:, -1].unsqueeze(1)  # Shape: [batch_size, 1]
 
             # Forward pass with mixed precision
             with autocast(device_type='cuda'):
-                steering_pred, speed_pred = model(frames)
-                loss_steering = criterion_steering(steering_pred, current_steering)
-                loss_speed = criterion_speed(speed_pred, current_speed)
+                # Pass both frames and vehicle states to the model
+                # The model now expects both frame data and vehicle state data
+                steering_pred, speed_pred, _ = model(frames, veh_states)
+                
+                # Get the future ground truth values from the dataset
+                # These are 5 future values (T+100ms to T+500ms) that we'll use as targets
+                future_steering_targets = batch['future_steering'].to(device)  # [batch_size, 5]
+                future_speed_targets = batch['future_speed'].to(device)  # [batch_size, 5]
+                
+                loss_steering = criterion_steering(steering_pred, future_steering_targets)
+                loss_speed = criterion_speed(speed_pred, future_speed_targets)
                 loss = steering_weight * loss_steering + speed_weight * loss_speed
 
             # Backward pass and optimization with scaler
@@ -314,17 +329,23 @@ def train_model(
                 if i >= detailed_samples:
                     break
                     
-                frames = batch['frames'].to(device)
-                steering = batch['steering'].to(device)
-                speed = batch['speed'].to(device)
-                current_steering = steering[:, -1].unsqueeze(1)
-                current_speed = speed[:, -1].unsqueeze(1)
+                frames = batch['frames'].to(device)  # Shape: [batch_size, window_size, 6, H, W]
+                steering = batch['steering'].to(device)  # Shape: [batch_size, window_size]
+                speed = batch['speed'].to(device)  # Shape: [batch_size, window_size]
                 
-                steering_pred, speed_pred = model(frames)
+                # Get future ground truth values
+                future_steering_targets = batch['future_steering'].to(device)  # [batch_size, 5]
+                future_speed_targets = batch['future_speed'].to(device)  # [batch_size, 5]
                 
-                # Get individual losses
-                steering_loss = criterion_steering(steering_pred, current_steering).item()
-                speed_loss = criterion_speed(speed_pred, current_speed).item()
+                # Create vehicle state tensor
+                veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]
+                
+                # Forward pass with the new model format
+                steering_pred, speed_pred, _ = model(frames, veh_states)
+                
+                # Get individual losses using the future predictions
+                steering_loss = criterion_steering(steering_pred, future_steering_targets).item()
+                speed_loss = criterion_speed(speed_pred, future_speed_targets).item()
                 
                 steering_loss_sum += steering_loss
                 speed_loss_sum += speed_loss
@@ -345,18 +366,22 @@ def train_model(
                 if data is None:
                     continue
 
-                frames = data['frames'].to(device)
-                steering = data['steering'].to(device)
-                speed = data['speed'].to(device)
+                frames = data['frames'].to(device)  # Shape: [batch_size, window_size, 6, H, W]
+                steering = data['steering'].to(device)  # Shape: [batch_size, window_size]
+                speed = data['speed'].to(device)  # Shape: [batch_size, window_size]
+                
+                # Create vehicle state tensor by combining speed and steering
+                veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]
 
-                # Get only the last frame's ground truth values
-                current_steering = steering[:, -1].unsqueeze(1)
-                current_speed = speed[:, -1].unsqueeze(1)
+                # Pass both frames and vehicle states to the model
+                steering_pred, speed_pred, _ = model(frames, veh_states)
+                
+                # Use the actual future ground truth values from the dataset
+                future_steering_targets = data['future_steering'].to(device)  # [batch_size, 5]
+                future_speed_targets = data['future_speed'].to(device)  # [batch_size, 5]
 
-                steering_pred, speed_pred = model(frames)
-
-                loss_steering = criterion_steering(steering_pred, current_steering)
-                loss_speed = criterion_speed(speed_pred, current_speed)
+                loss_steering = criterion_steering(steering_pred, future_steering_targets)
+                loss_speed = criterion_speed(speed_pred, future_speed_targets)
                 loss = steering_weight * loss_steering + speed_weight * loss_speed
 
                 val_loss += loss.item()

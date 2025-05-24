@@ -45,7 +45,7 @@ class DataPreprocessor:
         # Initialize frame reader
         frame_reader = FrameReader(video_path)
 
-        # Read frames and apply transformations with frame skipping
+        # Read frames and apply transformations
         frames = []
         for i, frame in enumerate(frame_reader):
             transformed_frame = self.transform(frame)
@@ -55,15 +55,17 @@ class DataPreprocessor:
         steering_for_frames = np.interp(frame_times, steering_times, steering_values)
         speed_for_frames = np.interp(frame_times, speed_times, speed_values)
 
-        # Old frame slicing operation to take every other 3 frames
-        frames = frames[::2]
-        steering_for_frames = steering_for_frames[::2]
-        speed_for_frames = speed_for_frames[::2]
+        # Keep all frames since videos are already at 20fps
+        # No need to slice frames with [::2] as the original code did
 
-        # Pad frames, steering, and speed data to ensure all videos are 1200 frames long
+        # Calculate frame delay for T-100ms
+        # At 20 FPS, each frame is 50ms, so 100ms = 2 frames
+        frame_delay = 2
+        
+        # Target length for sequence processing
         target_length = 600
 
-        # Pad frames
+        # Pad frames, steering, and speed data to ensure all videos meet target length
         current_len = len(frames)
         if current_len < target_length:
             padding_frames = target_length - current_len
@@ -83,11 +85,28 @@ class DataPreprocessor:
             padding_speed = target_length - len(speed_for_frames)
             speed_for_frames = np.pad(speed_for_frames, (0, padding_speed), 'edge')
 
-        # Stack frames into a single tensor
-        frames_tensor = torch.stack(frames)
+        # Create frame pairs (current and T-100ms)
+        # For the first 'frame_delay' frames, use duplicates of the first frame as the delayed frame
+        # For all frames before the last one, get pairs (current, T-100ms)
+        frame_pairs = []
+        
+        for i in range(target_length):
+            current_frame = frames[i]
+            # For the first few frames where T-100ms doesn't exist, use the current frame
+            if i < frame_delay:
+                delayed_frame = frames[0]  # Use the first frame
+            else:
+                delayed_frame = frames[i - frame_delay]  # Frame at T-100ms
+                
+            # Stack the current and delayed frames along the channel dimension
+            frame_pair = torch.cat([current_frame, delayed_frame], dim=0)  # [6, H, W]
+            frame_pairs.append(frame_pair)
+        
+        # Stack all frame pairs into a single tensor [N, 6, H, W]
+        frame_pairs_tensor = torch.stack(frame_pairs)
 
         # Convert steering and speed data to tensors
         steering_tensor = torch.tensor(steering_for_frames, dtype=torch.float32)
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
 
-        return frames_tensor, steering_tensor, speed_tensor
+        return frame_pairs_tensor, steering_tensor, speed_tensor

@@ -94,21 +94,25 @@ class DataPreprocessor:
             padding_speed = target_length - len(speed_for_frames)
             speed_for_frames = np.pad(speed_for_frames, (0, padding_speed), 'edge')
 
-        # Create frame pairs (current and T-100ms)
-        # For the first 'frame_delay' frames, use duplicates of the first frame as the delayed frame
-        # For all frames before the last one, get pairs (current, T-100ms)
+        # Create frame pairs for each window (0,2), (1,3), etc.
+        # Ensure we have enough frames for the target length
         frame_pairs = []
         
+        # We'll only pair frames if they're within the valid range
+        max_idx = min(target_length, len(frames) - self.frame_delay)
+        
         for i in range(target_length):
-            current_frame = frames[i]
-            # For the first few frames where T-100ms doesn't exist, use the current frame
-            if i < self.frame_delay:
-                delayed_frame = frames[0]  # Use the first frame
+            # If we can make a valid pair (i, i+frame_delay)
+            if i < max_idx:
+                first_frame = frames[i]
+                second_frame = frames[i + self.frame_delay]
             else:
-                delayed_frame = frames[i - self.frame_delay]  # Frame at T-100ms
-                
-            # Stack the current and delayed frames along the channel dimension
-            frame_pair = torch.cat([current_frame, delayed_frame], dim=0)  # [6, H, W]
+                # For any remaining frames that can't be paired, use the last valid pair
+                first_frame = frames[max_idx - 1] if max_idx > 0 else frames[0]
+                second_frame = frames[min(max_idx - 1 + self.frame_delay, len(frames)-1)] if max_idx > 0 else frames[0]
+            
+            # Stack the frames along the channel dimension
+            frame_pair = torch.cat([first_frame, second_frame], dim=0)  # [6, H, W]
             frame_pairs.append(frame_pair)
         
         # Stack all frame pairs into a single tensor [N, 6, H, W]

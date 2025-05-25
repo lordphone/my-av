@@ -54,9 +54,9 @@ def train_model(
     dataset_path, 
     checkpoint_dir="checkpoints", # Directory to save checkpoints
     resume_from=None, # Path to resume from checkpoint
-    window_size=19,  # For 1s of driving data at 20fps
-    target_length=600,  # Length of each segment in frames
-    stride=1,  # Stride between consecutive windows
+    window_size=20,  # For 1s of driving data at 20fps
+    target_length=1200,  # Length of each segment in frames
+    stride=20,  # Non-overlapping windows
     batch_size=16, 
     num_epochs=30, 
     lr=0.0001,

@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
-    def __init__(self, base_dataset, window_size=19, target_length=600, stride=1, 
+    def __init__(self, base_dataset, window_size=20, target_length=1200, stride=20, 
                  img_size=(240, 320), frame_delay=2, future_steps=5, future_step_size=2,
                  fps=20):
         """Initialize the processed dataset.
@@ -40,8 +40,8 @@ class ProcessedDataset(Dataset):
         )
 
         # Calculate windows per segment based on target_length and window_size
-        # Account for overlapping windows
-        self.windows_per_segment = (target_length - window_size) // self.stride + 1
+        # Account for overlapping windows and frame_delay offset
+        self.windows_per_segment = (target_length - window_size) // self.stride + 1 - frame_delay
         
         # Simplified cache - just single variables instead of dict and list
         self.cached_segment_idx = None
@@ -90,8 +90,9 @@ class ProcessedDataset(Dataset):
         frames_tensor, steering_tensor, speed_tensor = self.cached_segment_data
 
         # Extract the window of data with stride
+        # Use non-overlapping windows (stride=20)
         start_idx = window_idx * self.stride
-        end_idx = start_idx + self.window_size
+        end_idx = start_idx + self.window_size  # Full 20-frame window
 
         # Slice the tensors to get the window
         # frames_tensor now contains frame pairs where each frame is a stack of [current, T-100ms]

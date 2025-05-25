@@ -24,9 +24,9 @@ class TestTrainModel(unittest.TestCase):
             # Call train_model with all the explicit parameters
             model = train_model(
                 dataset_path=self.dataset_path,
-                window_size=19,  # For 1s of driving data at 20fps
-                target_length=600,  # Length of each segment in frames
-                stride=1,  # Stride between consecutive windows
+                window_size=20,  # For 1s of driving data at 20fps
+                target_length=1200,  # Length of each segment in frames
+                stride=20,  # Non-overlapping windows
                 batch_size=16,  # Batch size
                 num_epochs=5,  # Reduced for testing
                 lr=0.0001,  # Learning rate

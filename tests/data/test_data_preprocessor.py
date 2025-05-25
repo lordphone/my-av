@@ -99,7 +99,7 @@ class TestDataPreprocessor(unittest.TestCase):
 
     def test_padding(self):
         """Test that the data is padded correctly to the target length"""
-        target_length = 600
+        target_length = 1200
 
         # Check padding
         self.assertEqual(self.frames_tensor.shape[0], target_length, "Frames should be padded to the target length")

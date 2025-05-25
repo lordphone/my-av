@@ -27,7 +27,7 @@ class TestTrainModel(unittest.TestCase):
                 window_size=20,  # For 1s of driving data at 20fps
                 target_length=1200,  # Length of each segment in frames
                 stride=20,  # Non-overlapping windows
-                batch_size=16,  # Batch size
+                batch_size=20,  # Batch size
                 num_epochs=5,  # Reduced for testing
                 lr=0.0001,  # Learning rate
                 img_size=(240, 320),  # Image dimensions

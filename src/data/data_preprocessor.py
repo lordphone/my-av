@@ -28,7 +28,7 @@ class DataPreprocessor:
             )
         ])
 
-    def preprocess_segment(self, segment_data, target_length=600):
+    def preprocess_segment(self, segment_data, target_length=1200):
         """Preprocess a single segment of data with a sliding window.
         
         Args:

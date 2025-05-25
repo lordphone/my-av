@@ -114,7 +114,7 @@ def train_model(
         logging.info(f"Train videos: {len(train_videos_indices)}, Val videos: {len(val_videos_indices)}")
 
     # Number of workers to use for data loading
-    num_workers = 4  # Adjust based on your system's CPU cores
+    num_workers = 2  # Adjust based on your system's CPU cores
     
     # Create DataLoaders with batch samplers
     train_dataset = VideoWindowIterableDataset(processed_dataset, video_indices=train_videos_indices, shuffle=True)

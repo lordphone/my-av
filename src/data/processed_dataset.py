@@ -15,7 +15,7 @@ class ProcessedDataset(Dataset):
             base_dataset: The base dataset to process
             window_size: Number of frames in each window (19 for 1s of driving at 20fps)
             target_length: Target length for each segment in frames
-            stride: Stride between consecutive windows (1 for maximum overlap)
+            stride: Stride between consecutive windows (20 for no overlapping)
             img_size: Size of the images (height, width)
             frame_delay: Number of frames for T-100ms lookback (2 for 100ms at 20fps)
             future_steps: Number of future steps to predict (default 5)

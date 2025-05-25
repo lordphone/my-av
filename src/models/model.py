@@ -80,7 +80,7 @@ class Model(nn.Module):
 if __name__ == '__main__':
     batch_size = 2
     seq_len = 5
-    C, H, W = 3, 160, 320
+    C, H, W = 3, 240, 320
     num_vehicle_state_features = 2  # speed, steering
     num_future_predictions = 5
 

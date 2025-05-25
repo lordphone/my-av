@@ -249,8 +249,6 @@ def train_model(
             frames = batch['frames'].to(device)  # Shape: [batch_size, window_size, 6, H, W]
             steering = batch['steering'].to(device)  # Shape: [batch_size, window_size]
             speed = batch['speed'].to(device)  # Shape: [batch_size, window_size]
-            current_steering = batch['current_steering'].to(device).unsqueeze(1)  # Shape: [batch_size, 1]
-            current_speed = batch['current_speed'].to(device).unsqueeze(1)  # Shape: [batch_size, 1]
             
             # Create vehicle state tensor by combining speed and steering
             veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]

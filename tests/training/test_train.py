@@ -20,7 +20,24 @@ class TestTrainModel(unittest.TestCase):
             dataset_size = len(dataset)
             print(f"Training on {dataset_size} videos.")
             start_time = time.time()
-            model = train_model(self.dataset_path, window_size=15, batch_size=16, num_epochs=5, lr=0.0001)
+            
+            # Call train_model with all the explicit parameters
+            model = train_model(
+                dataset_path=self.dataset_path,
+                window_size=19,  # For 1s of driving data at 20fps
+                target_length=600,  # Length of each segment in frames
+                stride=1,  # Stride between consecutive windows
+                batch_size=16,  # Batch size
+                num_epochs=5,  # Reduced for testing
+                lr=0.0001,  # Learning rate
+                img_size=(240, 320),  # Image dimensions
+                frame_delay=2,  # Frames for T-100ms lookback
+                future_steps=5,  # Number of future steps to predict
+                future_step_size=2,  # Frames between future predictions
+                fps=20,  # Original video frames per second
+                debug=True  # Enable debugging output
+            )
+            
             self.assertIsNotNone(model, "Model should not be None after training.")
             saved_model_path = 'models/best_model.pth'
             self.assertTrue(os.path.exists(saved_model_path), "Best model file should be saved.")

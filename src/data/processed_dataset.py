@@ -6,15 +6,41 @@ from torch.utils.data import Dataset
 from src.data.data_preprocessor import DataPreprocessor
 
 class ProcessedDataset(Dataset):
-    def __init__(self, base_dataset, window_size=19, target_length=600):
+    def __init__(self, base_dataset, window_size=19, target_length=600, stride=1, 
+                 img_size=(240, 320), frame_delay=2, future_steps=5, future_step_size=2,
+                 fps=20):
+        """Initialize the processed dataset.
+        
+        Args:
+            base_dataset: The base dataset to process
+            window_size: Number of frames in each window (19 for 1s of driving at 20fps)
+            target_length: Target length for each segment in frames
+            stride: Stride between consecutive windows (1 for maximum overlap)
+            img_size: Size of the images (height, width)
+            frame_delay: Number of frames for T-100ms lookback (2 for 100ms at 20fps)
+            future_steps: Number of future steps to predict (default 5)
+            future_step_size: Number of frames between future predictions (2 = 100ms at 20fps)
+            fps: Original video frames per second
+        """
         self.base_dataset = base_dataset
-        self.preprocessor = DataPreprocessor()
-        self.window_size = window_size  # Using window_size=19 for 1s of driving data
+        self.window_size = window_size
         self.target_length = target_length
+        self.stride = stride
+        self.img_size = img_size
+        self.frame_delay = frame_delay
+        self.future_steps = future_steps
+        self.future_step_size = future_step_size
+        self.fps = fps
+        
+        # Create preprocessor with the same parameters
+        self.preprocessor = DataPreprocessor(
+            img_size=img_size,
+            frame_delay=frame_delay,
+            fps=fps
+        )
 
-        # calculate window per segment based on target_length and window_size
-        # Account for overlapping windows if needed
-        self.stride = 1  # Can be adjusted for overlapping or skip windows
+        # Calculate windows per segment based on target_length and window_size
+        # Account for overlapping windows
         self.windows_per_segment = (target_length - window_size) // self.stride + 1
         
         # Simplified cache - just single variables instead of dict and list
@@ -54,7 +80,10 @@ class ProcessedDataset(Dataset):
         if self.cached_segment_idx != segment_idx:
             # Load and prepare the segment
             segment_data = self.base_dataset[segment_idx]
-            self.cached_segment_data = self.preprocessor.preprocess_segment(segment_data)
+            self.cached_segment_data = self.preprocessor.preprocess_segment(
+                segment_data,
+                target_length=self.target_length
+            )
             self.cached_segment_idx = segment_idx
 
         # Retrieve the cached segment data
@@ -75,13 +104,13 @@ class ProcessedDataset(Dataset):
         current_speed = speed_window[-1]
         
         # Try to get future ground truth values if they exist in the segment
-        # This is for the 5 future predictions (T+100ms to T+500ms)
+        # This is for the future predictions (T+100ms to T+500ms)
         future_steering = []
         future_speed = []
         
-        # Calculate how many future frames we need (5) and the step size (2 = 100ms assuming 20 FPS)
-        num_future = 5
-        future_step = 2
+        # Use class variables instead of hardcoded values
+        num_future = self.future_steps  # Default 5
+        future_step = self.future_step_size  # Default 2 (100ms at 20fps)
         
         # Get future values from the segment data if they exist
         end_idx_in_segment = start_idx + self.window_size

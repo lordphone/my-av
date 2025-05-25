@@ -8,20 +8,36 @@ import torch
 from torchvision import transforms
 
 class DataPreprocessor:
-    def __init__(self, img_size=(240, 320)):
+    def __init__(self, 
+                 img_size=(240, 320),
+                 frame_delay=2,  # For T-100ms frames at 20fps
+                 fps=20,         # Original video FPS 
+                 normalization_mean=[0.485, 0.456, 0.406],  # ImageNet means
+                 normalization_std=[0.229, 0.224, 0.225]    # ImageNet stds
+                ):
         self.img_size = img_size
+        self.frame_delay = frame_delay
+        self.fps = fps
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize(img_size),
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],  # ImageNet means
-                std=[0.229, 0.224, 0.225]     # ImageNet stds
+                mean=normalization_mean,
+                std=normalization_std
             )
         ])
 
-    def preprocess_segment(self, segment_data):
-        """Preprocess a single segment of data with a sliding window."""
+    def preprocess_segment(self, segment_data, target_length=600):
+        """Preprocess a single segment of data with a sliding window.
+        
+        Args:
+            segment_data: Dictionary containing video_path, log_path, and pose_path
+            target_length: Target length for processed segments, in frames
+            
+        Returns:
+            tuple of (frame_pairs_tensor, steering_tensor, speed_tensor)
+        """
 
         # Get paths from the segment data
         video_path = segment_data['video_path']
@@ -55,15 +71,8 @@ class DataPreprocessor:
         steering_for_frames = np.interp(frame_times, steering_times, steering_values)
         speed_for_frames = np.interp(frame_times, speed_times, speed_values)
 
-        # Keep all frames since videos are already at 20fps
-        # No need to slice frames with [::2] as the original code did
-
-        # Calculate frame delay for T-100ms
-        # At 20 FPS, each frame is 50ms, so 100ms = 2 frames
-        frame_delay = 2
-        
-        # Target length for sequence processing
-        target_length = 600
+        # Keep all frames since videos are already at desired FPS
+        # If FPS adjustment is needed, would be handled here based on self.fps
 
         # Pad frames, steering, and speed data to ensure all videos meet target length
         current_len = len(frames)
@@ -93,10 +102,10 @@ class DataPreprocessor:
         for i in range(target_length):
             current_frame = frames[i]
             # For the first few frames where T-100ms doesn't exist, use the current frame
-            if i < frame_delay:
+            if i < self.frame_delay:
                 delayed_frame = frames[0]  # Use the first frame
             else:
-                delayed_frame = frames[i - frame_delay]  # Frame at T-100ms
+                delayed_frame = frames[i - self.frame_delay]  # Frame at T-100ms
                 
             # Stack the current and delayed frames along the channel dimension
             frame_pair = torch.cat([current_frame, delayed_frame], dim=0)  # [6, H, W]

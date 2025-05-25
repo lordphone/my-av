@@ -54,10 +54,17 @@ def train_model(
     dataset_path, 
     checkpoint_dir="checkpoints", # Directory to save checkpoints
     resume_from=None, # Path to resume from checkpoint
-    window_size=15, 
+    window_size=19,  # For 1s of driving data at 20fps
+    target_length=600,  # Length of each segment in frames
+    stride=1,  # Stride between consecutive windows
     batch_size=16, 
     num_epochs=30, 
     lr=0.0001,
+    img_size=(240, 320),  # Image dimensions
+    frame_delay=2,  # Frames for T-100ms lookback (2 for 100ms at 20fps)
+    future_steps=5,  # Number of future steps to predict
+    future_step_size=2,  # Frames between future predictions (2 = 100ms at 20fps)
+    fps=20,  # Original video frames per second
     debug=False):  # Add debug flag
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,7 +83,17 @@ def train_model(
 
     # Load dataset
     base_dataset = Comma2k19Dataset(dataset_path)
-    processed_dataset = ProcessedDataset(base_dataset, window_size=window_size)
+    processed_dataset = ProcessedDataset(
+        base_dataset, 
+        window_size=window_size,
+        target_length=target_length,
+        stride=stride,
+        img_size=img_size,
+        frame_delay=frame_delay,
+        future_steps=future_steps,
+        future_step_size=future_step_size,
+        fps=fps
+    )
 
     # Group dataset by video
     video_indices = data_utils.get_video_indices(processed_dataset)  # Assuming this method exists
@@ -241,11 +258,14 @@ def train_model(
             # Data loading finished, now start timing model computation
             model_start_time = time.time()
 
+            # Reset hidden state for each new batch to avoid information leakage between sequences
+            hidden_state = None
+                
             # Forward pass with mixed precision
             with autocast(device_type='cuda'):
                 # Pass both frames and vehicle states to the model
                 # The model now expects both frame data and vehicle state data
-                steering_pred, speed_pred, _ = model(frames, veh_states)
+                steering_pred, speed_pred, _ = model(frames, veh_states, hidden_state)
                 
                 # Get the future ground truth values from the dataset
                 # These are 5 future values (T+100ms to T+500ms) that we'll use as targets
@@ -340,8 +360,11 @@ def train_model(
                 # Create vehicle state tensor
                 veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]
                 
+                # Reset hidden state for each evaluation batch
+                hidden_state = None
+                
                 # Forward pass with the new model format
-                steering_pred, speed_pred, _ = model(frames, veh_states)
+                steering_pred, speed_pred, _ = model(frames, veh_states, hidden_state)
                 
                 # Get individual losses using the future predictions
                 steering_loss = criterion_steering(steering_pred, future_steering_targets).item()
@@ -373,8 +396,11 @@ def train_model(
                 # Create vehicle state tensor by combining speed and steering
                 veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]
 
+                # Reset hidden state for each validation batch
+                hidden_state = None
+
                 # Pass both frames and vehicle states to the model
-                steering_pred, speed_pred, _ = model(frames, veh_states)
+                steering_pred, speed_pred, _ = model(frames, veh_states, hidden_state)
                 
                 # Use the actual future ground truth values from the dataset
                 future_steering_targets = data['future_steering'].to(device)  # [batch_size, 5]

@@ -454,8 +454,8 @@ if __name__ == "__main__":
                         help='Training mode: "train" for real training, "test" for test training')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--epochs', type=int, help='Number of epochs to train (default: 30 for train, 5 for test)')
-    parser.add_argument('--batch-size', type=int, default=16, help='Batch size for training')
-    parser.add_argument('--window-size', type=int, default=15, help='Window size for temporal data')
+    parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
+    parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
     
     args = parser.parse_args()
     

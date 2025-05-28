@@ -74,12 +74,9 @@ def process_video_with_dataset(model_path, video_path, output_path, window_size=
 
     # Load the model
     try:
-        model = Model()
-        print(f"Loading model from {model_path}")
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        model.to(device)
-        model.eval()
-        print("Model loaded successfully")
+        from src.utils.inference_utils import load_model_for_inference
+        model, norm_mean, norm_std = load_model_for_inference(model_path, Model, device)
+        print(f"Model loaded successfully with normalization: mean={norm_mean}, std={norm_std}")
     except Exception as e:
         print(f"Error loading model: {e}")
         return
@@ -185,8 +182,8 @@ def process_video_with_dataset(model_path, video_path, output_path, window_size=
             frames_window = window_data['frames']  # [window_size, 6, H, W]
             steering_window = window_data['steering']  # [window_size]
             speed_window = window_data['speed']  # [window_size]
-            current_steering = window_data['current_steering']  # Single value
-            current_speed = window_data['current_speed']  # Single value
+            current_steering = window_data['steering'][-1]  # Last value from steering sequence
+            current_speed = window_data['speed'][-1]  # Last value from speed sequence
             
             # Process each frame in the window
             for frame_in_window in range(len(frames_window)):

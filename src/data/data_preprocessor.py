@@ -94,32 +94,12 @@ class DataPreprocessor:
             padding_speed = target_length - len(speed_for_frames)
             speed_for_frames = np.pad(speed_for_frames, (0, padding_speed), 'edge')
 
-        # Create frame pairs for each window (0,2), (1,3), etc.
-        # Ensure we have enough frames for the target length
-        frame_pairs = []
-        
-        # We'll only pair frames if they're within the valid range
-        max_idx = min(target_length, len(frames) - self.frame_delay)
-        
-        for i in range(target_length):
-            # If we can make a valid pair (i, i+frame_delay)
-            if i < max_idx:
-                first_frame = frames[i]
-                second_frame = frames[i + self.frame_delay]
-            else:
-                # For any remaining frames that can't be paired, use the last valid pair
-                first_frame = frames[max_idx - 1] if max_idx > 0 else frames[0]
-                second_frame = frames[min(max_idx - 1 + self.frame_delay, len(frames)-1)] if max_idx > 0 else frames[0]
-            
-            # Stack the frames along the channel dimension
-            frame_pair = torch.cat([first_frame, second_frame], dim=0)  # [6, H, W]
-            frame_pairs.append(frame_pair)
-        
-        # Stack all frame pairs into a single tensor [N, 6, H, W]
-        frame_pairs_tensor = torch.stack(frame_pairs)
+        # Stack all individual frames into a single tensor [N, 3, H, W]
+        # Each frame is now just a single normalized frame, not a pair
+        frames_tensor = torch.stack(frames)
 
         # Convert steering and speed data to tensors
         steering_tensor = torch.tensor(steering_for_frames, dtype=torch.float32)
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
 
-        return frame_pairs_tensor, steering_tensor, speed_tensor
+        return frames_tensor, steering_tensor, speed_tensor

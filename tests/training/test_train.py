@@ -35,7 +35,7 @@ class TestTrainModel(unittest.TestCase):
                 future_steps=5,  # Number of future steps to predict
                 future_step_size=2,  # Frames between future predictions
                 fps=20,  # Original video frames per second
-                debug=True  # Enable debugging output
+                debug=False  # Enable debugging output
             )
             
             self.assertIsNotNone(model, "Model should not be None after training.")

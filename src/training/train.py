@@ -116,6 +116,10 @@ def train_model(
     # Number of workers to use for data loading
     num_workers = 2  # Adjust based on your system's CPU cores
     
+    # Store normalization constants for inference
+    normalization_mean = processed_dataset.preprocessor.transform.transforms[-1].mean
+    normalization_std = processed_dataset.preprocessor.transform.transforms[-1].std
+    
     # Create DataLoaders with batch samplers
     train_dataset = VideoWindowIterableDataset(processed_dataset, video_indices=train_videos_indices, shuffle=True)
     val_dataset = VideoWindowIterableDataset(processed_dataset, video_indices=val_videos_indices, shuffle=True)
@@ -175,7 +179,7 @@ def train_model(
     max_grad_norm = 1.0
 
     # Mixed precision training
-    scaler = GradScaler()
+    scaler = GradScaler('cuda')
 
     # --- Checkpoint Loading ---
     start_epoch = 0
@@ -215,6 +219,19 @@ def train_model(
         # Load other training parameters
         start_epoch = checkpoint['epoch']
         best_val_loss = checkpoint['best_val_loss']
+        
+        # Load normalization constants if available (for backward compatibility)
+        if 'normalization_mean' in checkpoint and 'normalization_std' in checkpoint:
+            loaded_mean = checkpoint['normalization_mean']
+            loaded_std = checkpoint['normalization_std']
+            logging.info(f"Loaded normalization constants from checkpoint: mean={loaded_mean}, std={loaded_std}")
+            # Verify they match current preprocessor settings
+            if (loaded_mean != normalization_mean or loaded_std != normalization_std):
+                logging.warning(f"Checkpoint normalization constants differ from current settings!")
+                logging.warning(f"Checkpoint: mean={loaded_mean}, std={loaded_std}")
+                logging.warning(f"Current: mean={normalization_mean}, std={normalization_std}")
+        else:
+            logging.info("No normalization constants found in checkpoint (older checkpoint format)")
     else:
         if resume_from:
              logging.warning(f"Checkpoint file not found at '{resume_from}'. Starting training from scratch.")
@@ -237,10 +254,14 @@ def train_model(
         logging.info(f"Starting epoch {epoch+1}/{num_epochs}")
         model.train()
         running_loss = 0.0
-
+        
         # For profiling data loading vs model training
         total_data_loading_time = 0
         total_model_time = 0
+        
+        # Accumulate component losses during training
+        running_steering_loss = 0.0
+        running_speed_loss = 0.0
 
         for i, batch in enumerate(train_loader):
             # Start timing data loading
@@ -273,6 +294,10 @@ def train_model(
                 loss_steering = criterion_steering(steering_pred, future_steering_targets)
                 loss_speed = criterion_speed(speed_pred, future_speed_targets)
                 loss = steering_weight * loss_steering + speed_weight * loss_speed
+                
+                # Accumulate component losses for monitoring
+                running_steering_loss += loss_steering.item()
+                running_speed_loss += loss_speed.item()
 
             # Backward pass and optimization with scaler
             optimizer.zero_grad()
@@ -334,53 +359,20 @@ def train_model(
                 logging.info(f"Epoch time breakdown - Data loading: {avg_data_loading_time:.4f}s ({data_percentage:.1f}%), Model: {avg_model_time:.4f}s ({model_percentage:.1f}%)")
 
         # Calculate average loss for the epoch
-        avg_train_loss = running_loss / len(train_loader) / batch_size
+        avg_train_loss = running_loss / len(train_loader)  # Mean across batches, no need to divide by batch_size again
         
-        # Decompose losses for more detailed monitoring
-        with torch.no_grad():
-            model.eval()
-            detailed_samples = min(100, len(train_loader))  # Limit to 100 batches for speed
-            steering_loss_sum = 0.0
-            speed_loss_sum = 0.0
-            
-            for i, batch in enumerate(train_loader):
-                if i >= detailed_samples:
-                    break
-                    
-                frames = batch['frames'].to(device)  # Shape: [batch_size, window_size, 6, H, W]
-                steering = batch['steering'].to(device)  # Shape: [batch_size, window_size]
-                speed = batch['speed'].to(device)  # Shape: [batch_size, window_size]
-                
-                # Get future ground truth values
-                future_steering_targets = batch['future_steering'].to(device)  # [batch_size, 5]
-                future_speed_targets = batch['future_speed'].to(device)  # [batch_size, 5]
-                
-                # Create vehicle state tensor
-                veh_states = torch.stack([speed, steering], dim=2)  # Shape: [batch_size, window_size, 2]
-                
-                # Reset hidden state for each evaluation batch
-                hidden_state = None
-                
-                # Forward pass with the new model format
-                steering_pred, speed_pred, _ = model(frames, veh_states, hidden_state)
-                
-                # Get individual losses using the future predictions
-                steering_loss = criterion_steering(steering_pred, future_steering_targets).item()
-                speed_loss = criterion_speed(speed_pred, future_speed_targets).item()
-                
-                steering_loss_sum += steering_loss
-                speed_loss_sum += speed_loss
-            
-            avg_steering_loss = steering_loss_sum / detailed_samples
-            avg_speed_loss = speed_loss_sum / detailed_samples
-        
-        # Log individual loss components
-        logging.info(f"Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
+        # Calculate component loss averages from accumulated values
+        avg_steering_loss = running_steering_loss / len(train_loader)
+        avg_speed_loss = running_speed_loss / len(train_loader)
         # --- End of Training Phase ---
 
         # --- Validation Phase ---
         model.eval()
         val_loss = 0.0
+        
+        # Accumulate validation component losses
+        val_steering_loss = 0.0
+        val_speed_loss = 0.0
 
         with torch.no_grad():
             for data in val_loader:
@@ -409,9 +401,17 @@ def train_model(
                 loss = steering_weight * loss_steering + speed_weight * loss_speed
 
                 val_loss += loss.item()
+                
+                # Accumulate validation component losses
+                val_steering_loss += loss_steering.item()
+                val_speed_loss += loss_speed.item()
 
         # Calculate average validation loss
-        avg_val_loss = val_loss / len(val_loader) / batch_size
+        avg_val_loss = val_loss / len(val_loader)  # Mean across batches, no need to divide by batch_size again
+        
+        # Calculate validation component loss averages
+        avg_val_steering_loss = val_steering_loss / len(val_loader)
+        avg_val_speed_loss = val_speed_loss / len(val_loader)
         # --- End of Validation Phase ---
 
         # Update learning rate
@@ -421,6 +421,8 @@ def train_model(
         epoch_time = time.time() - epoch_start_time
         logging.info(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
         logging.info(f"Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}")
+        logging.info(f"Train Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
+        logging.info(f"Val Component Losses - Steering: {avg_val_steering_loss:.4f}, Speed: {avg_val_speed_loss:.4f}")
         logging.info(f"Total Train Loss: {running_loss:.4f}, Total Val Loss: {val_loss:.4f}")
 
         # --- Checkpoint Saving ---
@@ -429,7 +431,13 @@ def train_model(
             best_model_path = os.path.join(model_dir, 'best_model.pth')
             logging.info(f"New best model found! Avg Val Loss: {avg_val_loss:.4f} (previous best: {best_val_loss if epoch > 0 else 'N/A'})")
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), best_model_path)
+            # Save best model with normalization constants for inference
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'normalization_mean': normalization_mean,
+                'normalization_std': normalization_std,
+                'val_loss': avg_val_loss,
+            }, best_model_path)
         
         # Save the latest checkpoint including optimizer state etc.
         latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
@@ -439,6 +447,8 @@ def train_model(
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'best_val_loss': best_val_loss,
+            'normalization_mean': normalization_mean,
+            'normalization_std': normalization_std,
         }, filename=latest_checkpoint_path)
         # --- End of Checkpoint Saving ---
         

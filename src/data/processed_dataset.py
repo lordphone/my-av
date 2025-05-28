@@ -2,6 +2,7 @@
 # Combines dataset with preprocessing.
 
 import torch
+import gc
 from torch.utils.data import Dataset
 from src.data.data_preprocessor import DataPreprocessor
 
@@ -13,7 +14,7 @@ class ProcessedDataset(Dataset):
         
         Args:
             base_dataset: The base dataset to process
-            window_size: Number of frames in each window (19 for 1s of driving at 20fps)
+            window_size: Number of frames in each window (20 frames = 1s at 20fps)
             target_length: Target length for each segment in frames
             stride: Stride between consecutive windows (20 for no overlapping)
             img_size: Size of the images (height, width)
@@ -39,11 +40,12 @@ class ProcessedDataset(Dataset):
             fps=fps
         )
 
-        # Calculate windows per segment based on target_length and window_size
-        # Account for overlapping windows and frame_delay offset
-        self.windows_per_segment = (target_length - window_size) // self.stride + 1 - frame_delay
+        # Calculate windows per segment ensuring we have enough future frames for predictions
+        future_frames_needed = (self.future_steps * self.future_step_size)  # 5 * 2 = 10 frames for T+500ms
+        max_start = self.target_length - self.window_size - future_frames_needed
+        self.windows_per_segment = (max_start // self.stride) + 1
         
-        # Simplified cache - just single variables instead of dict and list
+        # Simple cache - only cache one video at a time
         self.cached_segment_idx = None
         self.cached_segment_data = None
 
@@ -65,8 +67,8 @@ class ProcessedDataset(Dataset):
         return valid_indices
 
     def __len__(self):
-        # Calculate the total number of windows across all segments, each segment is 600 frames
-        return len(self.base_dataset) * self.windows_per_segment
+        # Calculate the total number of windows across all segments
+        return len(self._valid_indices)
 
     def __getitem__(self, idx):
         # Map the index to the segment and window
@@ -78,6 +80,14 @@ class ProcessedDataset(Dataset):
 
         # Check if the segment is already cached
         if self.cached_segment_idx != segment_idx:
+            # Explicitly clear previous cached data to free memory
+            if self.cached_segment_data is not None:
+                # Delete references to help garbage collection
+                del self.cached_segment_data
+                self.cached_segment_data = None
+                # Force garbage collection for large tensor cleanup
+                gc.collect()
+                
             # Load and prepare the segment
             segment_data = self.base_dataset[segment_idx]
             self.cached_segment_data = self.preprocessor.preprocess_segment(
@@ -90,19 +100,31 @@ class ProcessedDataset(Dataset):
         frames_tensor, steering_tensor, speed_tensor = self.cached_segment_data
 
         # Extract the window of data with stride
-        # Use non-overlapping windows (stride=20)
         start_idx = window_idx * self.stride
-        end_idx = start_idx + self.window_size  # Full 20-frame window
+        end_idx = start_idx + self.window_size
 
-        # Slice the tensors to get the window
-        # frames_tensor now contains frame pairs where each frame is a stack of [current, T-100ms]
-        frames_window = frames_tensor[start_idx:end_idx]  # [window_size, 6, H, W]
-        steering_window = steering_tensor[start_idx:end_idx]  # [window_size]
-        speed_window = speed_tensor[start_idx:end_idx]  # [window_size]
+        # Get the 20-frame window
+        frames_window = frames_tensor[start_idx:end_idx]  # [20, 3, H, W]
+        steering_window = steering_tensor[start_idx:end_idx]  # [20]
+        speed_window = speed_tensor[start_idx:end_idx]  # [20]
 
-        # Get current values (at the end of the sequence)
-        current_steering = steering_window[-1]
-        current_speed = speed_window[-1]
+        # Create frame pairs: each frame paired with its T-100ms frame
+        # This creates (window_size - frame_delay) = 18 pairs from 20 frames
+        frame_pairs = []
+        for i in range(self.frame_delay, self.window_size):  # frames 2-19 (18 pairs)
+            current_frame = frames_window[i]  # [3, H, W]
+            past_frame = frames_window[i - self.frame_delay]  # [3, H, W] 
+            
+            # Stack current and past frames along channel dimension
+            frame_pair = torch.cat([current_frame, past_frame], dim=0)  # [6, H, W]
+            frame_pairs.append(frame_pair)
+        
+        # Stack all frame pairs [18, 6, H, W] (sequence_length = window_size - frame_delay)
+        frames_paired = torch.stack(frame_pairs)
+        
+        # Get corresponding steering and speed for the paired frames (frames 2-19)
+        steering_sequence = steering_window[self.frame_delay:]  # [18]
+        speed_sequence = speed_window[self.frame_delay:]  # [18]
         
         # Try to get future ground truth values if they exist in the segment
         # This is for the future predictions (T+100ms to T+500ms)
@@ -114,9 +136,17 @@ class ProcessedDataset(Dataset):
         future_step = self.future_step_size  # Default 2 (100ms at 20fps)
         
         # Get future values from the segment data if they exist
-        end_idx_in_segment = start_idx + self.window_size
+        # Use the last frame in the window as reference point (frame 19 in the 20-frame window)
+        current_frame_idx = start_idx + self.window_size - 1
+        
+        # Additional safety check to ensure we don't exceed bounds
+        max_future_idx = current_frame_idx + (num_future * future_step)
+        if max_future_idx >= len(steering_tensor):
+            # Log a warning if this happens frequently
+            pass  # Could add logging here if needed
+        
         for i in range(1, num_future + 1):
-            future_idx = end_idx_in_segment + (i * future_step) - 1
+            future_idx = current_frame_idx + (i * future_step)
             
             # Check if the future index is within bounds
             if future_idx < len(steering_tensor):
@@ -129,11 +159,21 @@ class ProcessedDataset(Dataset):
         
         # Package the data for the model
         return {
-            'frames': frames_window,  # [window_size, 6, H, W] - each frame contains current and T-100ms
-            'steering': steering_window,  # [window_size]
-            'speed': speed_window,  # [window_size]
-            'current_steering': current_steering,  # Single value
-            'current_speed': current_speed,  # Single value
+            'frames': frames_paired,  # [18, 6, H, W] - 18 frame pairs, each with current and T-100ms
+            'steering': steering_sequence,  # [18] - steering for frames 2-19
+            'speed': speed_sequence,  # [18] - speed for frames 2-19
             'future_steering': torch.tensor(future_steering, dtype=torch.float32),  # [5] - T+100ms to T+500ms
             'future_speed': torch.tensor(future_speed, dtype=torch.float32)  # [5] - T+100ms to T+500ms
         }
+    
+    def clear_cache(self):
+        """Explicitly clear the cached segment data to free memory."""
+        if self.cached_segment_data is not None:
+            del self.cached_segment_data
+            self.cached_segment_data = None
+            self.cached_segment_idx = None
+            gc.collect()  # Force garbage collection
+    
+    def __del__(self):
+        """Cleanup method called when the object is destroyed."""
+        self.clear_cache()

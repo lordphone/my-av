@@ -27,34 +27,29 @@ class TestProcessedDataset(unittest.TestCase):
             self.assertIsNotNone(batch, "Batch should not be None")
             
             # Verify all required keys exist in the batch
-            required_keys = ['frames', 'steering', 'speed', 'current_steering', 'current_speed',
+            required_keys = ['frames', 'steering', 'speed',
                            'future_steering', 'future_speed']
             for key in required_keys:
                 self.assertIn(key, batch, f"Batch should contain '{key}'")
             
             # Check batch shapes
+            sequence_length = self.window_size - 2  # frame_delay = 2, so 20 - 2 = 18
             self.assertEqual(batch['frames'].shape[0], self.batch_size, "Batch size should match the DataLoader batch size")
-            self.assertEqual(batch['frames'].shape[1], self.window_size, "Each batch should have the correct window size")
+            self.assertEqual(batch['frames'].shape[1], sequence_length, "Each batch should have the correct sequence length")
             
             # Check that frames have 6 channels (stacked current + T-100ms)
             self.assertEqual(batch['frames'].shape[2], 6, "Each frame should have 6 channels (stacked current + T-100ms)")
             
-            # Check sequence dimensions
-            self.assertEqual(batch['steering'].shape[1], self.window_size, "Steering data should match the window size")
-            self.assertEqual(batch['speed'].shape[1], self.window_size, "Speed data should match the window size")
-            
-            # Check current values are single values
-            self.assertEqual(batch['current_steering'].dim(), 1, "Current steering should be a 1D tensor")
-            self.assertEqual(batch['current_steering'].shape[0], self.batch_size, "Current steering should have batch_size elements")
-            self.assertEqual(batch['current_speed'].dim(), 1, "Current speed should be a 1D tensor")
-            self.assertEqual(batch['current_speed'].shape[0], self.batch_size, "Current speed should have batch_size elements")
+            # Check sequence dimensions (should be window_size - frame_delay = 18)
+            self.assertEqual(batch['steering'].shape[1], sequence_length, "Steering data should match sequence length")
+            self.assertEqual(batch['speed'].shape[1], sequence_length, "Speed data should match sequence length")
             
             # Check future predictions are the right shape (5 timesteps)
             self.assertEqual(batch['future_steering'].shape, (self.batch_size, 5), "Future steering should have 5 timesteps")
             self.assertEqual(batch['future_speed'].shape, (self.batch_size, 5), "Future speed should have 5 timesteps")
             
-            # Verify that the current value (at T) is different from the first future value (at T+100ms)
-            self.assertFalse(torch.all(torch.eq(batch['current_steering'].unsqueeze(1), batch['future_steering'][:, 0].unsqueeze(1))), 
+            # Verify that the last steering value is different from the first future value (at T+100ms)
+            self.assertFalse(torch.all(torch.eq(batch['steering'][:, -1].unsqueeze(1), batch['future_steering'][:, 0].unsqueeze(1))), 
                            "Current and future steering values should not be identical")
             
             print(f"Batch frames shape: {batch['frames'].shape}")

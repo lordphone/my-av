@@ -20,3 +20,11 @@ super slow frame reading. probably a cuda or implementation problem.
 implemented batch frame reading to combat this^
 
 a rtx 4080 with 12gb vram still cant do much with a 3DCNN, right now 1 batch size, 5 frames at 320 * 160.
+
+turns out my orignal approach is okay for computer simulation, but doesnt work for inference on a comma3x at all, so switching to 2 frame + 5 frame prediction.
+
+shuffling videos and windows are a pain. tried custom sampler, custom batch sampler, what worked is converting my dataset into an iterable one, with custom shuffling.
+
+train script improvements: mixed precision training, multiple workers, GRU memory detachment/zeroing.
+
+steering loss outweighting speed by magnituted of hundreds.

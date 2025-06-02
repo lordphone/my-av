@@ -25,15 +25,22 @@ if not os.path.exists(log_dir):
     logging.info(f"Created log directory: {log_dir}")
 
 log_filename = os.path.join(log_dir, f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-logging.basicConfig(
-    filename=log_filename,
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-# A handler to print logs to console
+
+# Clear existing handlers to prevent duplication
+logging.getLogger().handlers = []
+
+# Create handlers
+file_handler = logging.FileHandler(log_filename)
 console_handler = logging.StreamHandler()
+
+# Set formatters
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+# Add handlers to the root logger
+logging.getLogger().addHandler(file_handler)
 logging.getLogger().addHandler(console_handler)
+logging.getLogger().setLevel(logging.INFO)
 
 from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast

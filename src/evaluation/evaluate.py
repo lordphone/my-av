@@ -102,9 +102,10 @@ def process_video_with_dataset(model_path, data_path, output_path, video_path):
             ground_truth.append((current_gt_steering, current_gt_speed))
     
 
-    # Replaced transformed frames with frames from original video
-    reader = FrameReader(video_path)
-    frames = [reader.get(i) for i in range(2, target_length)]
+    frames = []
+    frame_reader = FrameReader(video_path)
+    for i, frame in enumerate(frame_reader):
+        frames.append(frame)
     
     # Create visualization video
     create_visualization(frames, t_100ms_steering_preds, t_100ms_speed_preds, ground_truth, output_path)

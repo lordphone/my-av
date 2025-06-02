@@ -88,7 +88,7 @@ class FrameReader:
                 ffmpeg
                 .input(self.video_path, **input_args)
                 .filter('select', f'gte(n,{start_idx})')
-                .output('pipe:', format='rawvideo', pix_fmt='rgb24', vframes=batch_size)
+                .output('pipe:', format='rawvideo', pix_fmt='rgb24', vframes=batch_size, vsync='0')
                 .run(capture_stdout=True, capture_stderr=True)
             )
         except ffmpeg.Error as e:

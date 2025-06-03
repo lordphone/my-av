@@ -131,7 +131,13 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, 20.0, (width, height))
     
-    for i, (frame, pred_speed, pred_steering, gt) in enumerate(zip(frames, speed_preds, steering_preds, ground_truth)):
+    # Initialize progress bar
+    from tqdm import tqdm
+    
+    # Process frames with progress bar
+    for i, (frame, pred_speed, pred_steering, gt) in enumerate(tqdm(zip(frames, speed_preds, steering_preds, ground_truth), 
+                                                                  total=len(frames), 
+                                                                  desc="Creating visualization")):
         # Convert frame to numpy array if it's a tensor
         if isinstance(frame, torch.Tensor):
             frame = frame.permute(1, 2, 0).cpu().numpy()
@@ -153,19 +159,34 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
         # Convert ground truth speeds to mph
         gt_speed_mph = mps_to_mph(gt[1])
         
+        # Format steering angle display
+        gt_steering = gt[0]
+        if abs(gt_steering) < 1.0:
+            steering_display = "Straight"
+        else:
+            direction = "Left" if gt_steering > 0 else "Right"
+            steering_display = f"{direction} {abs(gt_steering):.1f}"
+            
         # Add current ground truth overlay (in white)
-        cv2.putText(frame, f"Current Speed: {gt_speed_mph:.1f} mph", (10, 30), 
+        cv2.putText(frame, f"Speed: {gt_speed_mph:.1f}", (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, f"Current Steering: {gt[0]:.4f} degrees", (10, 60), 
+        cv2.putText(frame, f"Steering: {steering_display}", (10, 60), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
         # Convert predicted speed to mph
         pred_speed_mph = mps_to_mph(pred_speed)
         
+        # Format predicted steering display
+        if abs(pred_steering) < 1.0:
+            pred_steering_display = "Straight"
+        else:
+            direction = "Left" if pred_steering > 0 else "Right"
+            pred_steering_display = f"{direction} {abs(pred_steering):.1f}"
+            
         # Add T+100ms prediction overlay (in green)
-        cv2.putText(frame, f"Pred Speed (T+100ms): {pred_speed_mph:.1f} mph", (10, 100), 
+        cv2.putText(frame, f"Pred Speed: {pred_speed_mph:.1f}", (10, 100), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame, f"Pred Steering (T+100ms): {pred_steering:.4f} degrees", (10, 130), 
+        cv2.putText(frame, f"Pred Steering: {pred_steering_display}", (10, 130), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         
         out.write(frame)

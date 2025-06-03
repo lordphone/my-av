@@ -108,7 +108,7 @@ class ProcessedDataset(Dataset):
         steering_window = steering_tensor[start_idx:end_idx]  # [20]
         speed_window = speed_tensor[start_idx:end_idx]  # [20]
 
-        # Create frame pairs: each frame paired with its T-100ms frame
+        # Create frame pairs: each frame paired with its T-100ms frame (2 frames earlier at 20fps)
         # This creates (window_size - frame_delay) = 18 pairs from 20 frames
         frame_pairs = []
         for i in range(self.frame_delay, self.window_size):  # frames 2-19 (18 pairs)
@@ -126,8 +126,8 @@ class ProcessedDataset(Dataset):
         steering_sequence = steering_window[self.frame_delay:]  # [18]
         speed_sequence = speed_window[self.frame_delay:]  # [18]
         
-        # Try to get future ground truth values if they exist in the segment
-        # This is for the future predictions (T+100ms to T+500ms)
+        # Get future ground truth values for predictions (T+100ms to T+500ms at 100ms intervals)
+        # Each step is 2 frames (100ms) at 20fps
         future_steering = []
         future_speed = []
         
@@ -136,7 +136,7 @@ class ProcessedDataset(Dataset):
         future_step = self.future_step_size  # Default 2 (100ms at 20fps)
         
         # Get future values from the segment data if they exist
-        # Use the last frame in the window as reference point (frame 19 in the 20-frame window)
+        # Use the last frame in the window as reference point (frame 19, 0-indexed, in the 20-frame window)
         current_frame_idx = start_idx + self.window_size - 1
         
         # Additional safety check to ensure we don't exceed bounds
@@ -159,10 +159,10 @@ class ProcessedDataset(Dataset):
         
         # Package the data for the model
         return {
-            'frames': frames_paired,  # [18, 6, H, W] - 18 frame pairs, each with current and T-100ms
-            'steering': steering_sequence,  # [18] - steering for frames 2-19
-            'speed': speed_sequence,  # [18] - speed for frames 2-19
-            'future_steering': torch.tensor(future_steering, dtype=torch.float32),  # [5] - T+100ms to T+500ms
+            'frames': frames_paired,  # [18, 6, H, W] - 18 frame pairs (indices 2-19), each with [current, t-100ms] stacked
+            'steering': steering_sequence,  # [18] - steering for frame indices 2-19 (aligned with frame_pairs)
+            'speed': speed_sequence,  # [18] - speed for frame indices 2-19 (aligned with frame_pairs)
+            'future_steering': torch.tensor(future_steering, dtype=torch.float32),  # [5] - steering at t+100ms to t+500ms (100ms steps)
             'future_speed': torch.tensor(future_speed, dtype=torch.float32)  # [5] - T+100ms to T+500ms
         }
     

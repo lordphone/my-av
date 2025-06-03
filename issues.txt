@@ -30,3 +30,5 @@ train script improvements: mixed precision training, multiple workers, GRU memor
 steering loss outweighting speed by magnituted of hundreds. It seems like this is due to speed being easy to learn? we will see.
 
 biggg issue. my videos arent being loaded properly! this whole time, every video is just loaded with the first 400 frames! Fixed by adding vsync='0' to frame reader ffmpeg
+
+Because a convolution sums across the channel axis, every activation coming out of that layer is now roughly 2× larger than the original network was trained to expect, so the network is receiving much larger inputs than it was trained on. This can cause issues with training stability and performance.

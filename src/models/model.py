@@ -36,8 +36,8 @@ class Model(nn.Module):
         self.cnn_backbone.conv1 = nn.Conv2d(6, 64, kernel_size=7, stride=2, padding=3, bias=False)
         with torch.no_grad():
             # copy pretrained weights to both halves of the 6-channel input
-            self.cnn_backbone.conv1.weight[:, :3, :, :] = orig_conv1
-            self.cnn_backbone.conv1.weight[:, 3:, :, :] = orig_conv1
+            self.cnn_backbone.conv1.weight[:, :3, :, :] = orig_conv1 * 0.5
+            self.cnn_backbone.conv1.weight[:, 3:, :, :] = orig_conv1 * 0.5
 
         # Total features into GRU: one CNN output + vehicle state dims
         gru_input_size = self.cnn_feature_dim + num_vehicle_state_features

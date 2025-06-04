@@ -40,6 +40,14 @@ class Comma2k19Dataset(torch.utils.data.Dataset):
                     segment_path = os.path.join(route_path, segment_id)
                     if not os.path.isdir(segment_path):
                         continue
+
+                    # Check frame_time count, if less than 1195, skip
+                    frame_times_path = os.path.join(segment_path, "global_pose", "frame_times")
+                    if not os.path.exists(frame_times_path):
+                        continue
+                    frame_times = np.load(frame_times_path)
+                    if len(frame_times) < 1195:
+                        continue
                         
                     # Add to samples if it has the required data
                     self.samples.append({

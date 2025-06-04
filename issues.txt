@@ -32,3 +32,6 @@ steering loss outweighting speed by magnituted of hundreds. It seems like this i
 biggg issue. my videos arent being loaded properly! this whole time, every video is just loaded with the first 400 frames! Fixed by adding vsync='0' to frame reader ffmpeg
 
 Because a convolution sums across the channel axis, every activation coming out of that layer is now roughly 2× larger than the original network was trained to expect, so the network is receiving much larger inputs than it was trained on. This can cause issues with training stability and performance.
+
+Insane batch loss size during some batches. I think this is due to the padding and videos being of different lengths. Wrote a script to analyze the video lengths, and 1% of videos are less than 1070 frames (short from the standard 1200).
+Might decide to not train on videos less than 1200 frames.

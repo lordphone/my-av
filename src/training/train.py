@@ -4,43 +4,29 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import os
-import time
 import random
 import src.utils.data_utils as data_utils
 import datetime
-
-# for logging
-import logging
-import time
 import gc
 
 # Set multiprocessing start method to 'spawn' for CUDA compatibility
 # This must be done at the module level before creating any DataLoaders
 torch.multiprocessing.set_start_method('spawn', force=True)
 
-# Update logging configuration to save logs in a dedicated 'logs' directory
-log_dir = "logs"  # Directory to save training logs
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-    logging.info(f"Created log directory: {log_dir}")
+# Initialize logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join("logs", f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
+        logging.StreamHandler()
+    ]
+)
 
-log_filename = os.path.join(log_dir, f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-
-# Clear existing handlers to prevent duplication
-logging.getLogger().handlers = []
-
-# Create handlers
-file_handler = logging.FileHandler(log_filename)
-console_handler = logging.StreamHandler()
-
-# Set formatters
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-
-# Add handlers to the root logger
-logging.getLogger().addHandler(file_handler)
-logging.getLogger().addHandler(console_handler)
-logging.getLogger().setLevel(logging.INFO)
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+logging.info("Logging initialized")
+logging.info(f"Starting training script at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
@@ -333,6 +319,17 @@ def train_model(
             # Set the start time for the next batch data loading
             next_data_loading_start_time = model_end_time
 
+            # Log detailed batch information
+            current_lr = optimizer.param_groups[0]['lr']
+            logging.info(
+                f"Epoch: {epoch+1:03d}/{num_epochs}, "
+                f"Batch: {i+1:05d}/{len(train_loader)}, "
+                f"Total Loss: {loss.item():.6f}, "
+                f"Steering Loss: {loss_steering.item():.6f}, "
+                f"Speed Loss: {loss_speed.item():.6f}, "
+                f"LR: {current_lr:.8f}"
+            )
+            
             running_loss += loss.item()
 
             # Log progress every 1000 batches
@@ -382,7 +379,7 @@ def train_model(
         val_speed_loss = 0.0
 
         with torch.no_grad():
-            for data in val_loader:
+            for val_i, data in enumerate(val_loader):
                 if data is None:
                     continue
 
@@ -412,6 +409,17 @@ def train_model(
                 # Accumulate validation component losses
                 val_steering_loss += loss_steering.item()
                 val_speed_loss += loss_speed.item()
+
+                # Log detailed batch information for validation
+                current_val_lr = optimizer.param_groups[0]['lr'] if hasattr(optimizer, 'param_groups') else None
+                logging.info(
+                    f"Validation - Epoch: {epoch+1:03d}/{num_epochs}, "
+                    f"Batch: {val_i+1:05d}/{len(val_loader)}, "
+                    f"Total Loss: {loss.item():.6f}, "
+                    f"Steering Loss: {loss_steering.item():.6f}, "
+                    f"Speed Loss: {loss_speed.item():.6f}, "
+                    f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
+                )
 
         # Calculate average validation loss
         avg_val_loss = val_loss / len(val_loader)  # Mean across batches, no need to divide by batch_size again

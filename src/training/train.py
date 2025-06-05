@@ -1,35 +1,20 @@
 # train.py
 # training script
+import os
+import logging
+import datetime
+import random
+import gc
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import os
-import logging
-import random
-import src.utils.data_utils as data_utils
-import datetime
-import gc
-import time
 
 # Set multiprocessing start method to 'spawn' for CUDA compatibility
 # This must be done at the module level before creating any DataLoaders
 torch.multiprocessing.set_start_method('spawn', force=True)
 
-# Initialize logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join("logs", f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
-        logging.StreamHandler()
-    ]
-)
-
-# Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
-logging.info("Logging initialized")
-logging.info(f"Starting training script at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
+# Import other modules after setting multiprocessing method
 from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
 from src.data.comma2k19dataset import Comma2k19Dataset
@@ -38,6 +23,29 @@ from src.models.model import Model
 from src.data.video_batch_sampler import VideoBatchSampler
 from src.data.video_window_dataset import VideoWindowIterableDataset
 from collections import OrderedDict
+import src.utils.data_utils as data_utils
+
+def setup_logging():
+    """Initialize logging configuration."""
+    # Ensure logs directory exists
+    os.makedirs("logs", exist_ok=True)
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join("logs", f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
+            logging.StreamHandler()
+        ],
+        force=True  # Override any existing handlers
+    )
+    
+    # Log initialization
+    logger = logging.getLogger(__name__)
+    logger.info("Logging initialized")
+    logger.info(f"Starting training script at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    return logger
 
 # Function to save checkpoints
 def save_checkpoint(state, filename="checkpoint.pth"):
@@ -473,6 +481,9 @@ def train_model(
     return model
 
 if __name__ == "__main__":
+    # Initialize logging
+    logger = setup_logging()
+    
     import argparse
     
     # Set up command-line argument parsing
@@ -503,7 +514,7 @@ if __name__ == "__main__":
     
     if args.mode == 'train':
         # Real training mode - use full dataset
-        logging.info(f"Starting real training mode with full dataset (epochs: {args.epochs})")
+        logger.info(f"Starting real training mode with full dataset (epochs: {args.epochs})")
         
         # Check for existing checkpoint
         checkpoint_dir = "checkpoints"
@@ -511,9 +522,9 @@ if __name__ == "__main__":
         resume_from = latest_checkpoint_path if os.path.exists(latest_checkpoint_path) else None
         
         if resume_from:
-            logging.info(f"Resuming training from checkpoint: {resume_from}")
+            logger.info(f"Resuming training from checkpoint: {resume_from}")
         else:
-            logging.info("No checkpoint found. Starting training from scratch.")
+            logger.info("No checkpoint found. Starting training from scratch.")
         
         train_model(
             dataset_path="/home/lordphone/my-av/data/raw/comma2k19",

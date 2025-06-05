@@ -102,4 +102,12 @@ class DataPreprocessor:
         steering_tensor = torch.tensor(steering_for_frames, dtype=torch.float32)
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
 
+        # Normalize steering and clamp extreme values
+        max_steering = 90.0  # degrees, adjust based on dataset distribution
+        steering_tensor = torch.clamp(steering_tensor, -max_steering, max_steering) / max_steering
+
+        # Normalize speed and clamp extreme values
+        max_speed = 50.0  # m/s, adjust based on dataset maximum speed
+        speed_tensor = torch.clamp(speed_tensor, 0.0, max_speed) / max_speed
+
         return frames_tensor, steering_tensor, speed_tensor

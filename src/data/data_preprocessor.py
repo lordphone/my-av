@@ -103,8 +103,8 @@ class DataPreprocessor:
         speed_tensor = torch.tensor(speed_for_frames, dtype=torch.float32)
 
         ### --- Normalization --- ###
-        STEER_CLIP = 20 # degrees
-        SPEED_CLIP = 40 # m/s
+        STEER_CLIP = 25 # degrees
+        SPEED_CLIP = 50 # m/s
 
         steering_tensor = torch.clamp(steering_tensor, -STEER_CLIP, STEER_CLIP) / STEER_CLIP
         speed_tensor = torch.clamp(speed_tensor, 0.0, SPEED_CLIP) / SPEED_CLIP

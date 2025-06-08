@@ -116,6 +116,18 @@ def mps_to_mph(speed_mps):
     """Convert speed from meters per second to miles per hour."""
     return speed_mps * 2.23694
 
+
+def denormalize_steering(steering_norm):
+    """Denormalize steering angle from [-1, 1] to [-20, 20] degrees"""
+    STEER_CLIP = 25  # degrees
+    return steering_norm * STEER_CLIP
+
+
+def denormalize_speed(speed_norm):
+    """Denormalize speed from [0, 1] to [0, 40] m/s"""
+    SPEED_CLIP = 50  # m/s
+    return speed_norm * SPEED_CLIP
+
 def create_visualization(frames, steering_preds, speed_preds, ground_truth, output_path):
     # Create a video that shows the frames with overlaid predictions and ground truth
     if len(frames) == 0:
@@ -156,16 +168,19 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
         elif len(frame.shape) == 3 and frame.shape[2] == 3:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
-        # Convert ground truth speeds to mph
-        gt_speed_mph = mps_to_mph(gt[1])
+        # Denormalize ground truth values
+        gt_steering_denorm = denormalize_steering(gt[0])
+        gt_speed_denorm = denormalize_speed(gt[1])
+        
+        # Convert speed to mph
+        gt_speed_mph = mps_to_mph(gt_speed_denorm)
         
         # Format steering angle display
-        gt_steering = gt[0]
-        if abs(gt_steering) < 1.0:
+        if abs(gt_steering_denorm) < 1.0:
             steering_display = "Straight"
         else:
-            direction = "Left" if gt_steering > 0 else "Right"
-            steering_display = f"{direction} {abs(gt_steering):.1f}"
+            direction = "Left" if gt_steering_denorm > 0 else "Right"
+            steering_display = f"{direction} {abs(gt_steering_denorm):.1f}"
             
         # Add current ground truth overlay (in white)
         cv2.putText(frame, f"Speed: {gt_speed_mph:.1f}", (10, 30), 
@@ -173,15 +188,17 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
         cv2.putText(frame, f"Steering: {steering_display}", (10, 60), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         
-        # Convert predicted speed to mph
-        pred_speed_mph = mps_to_mph(pred_speed)
+        # Denormalize and convert predicted speed to mph
+        pred_speed_denorm = denormalize_speed(pred_speed)
+        pred_speed_mph = mps_to_mph(pred_speed_denorm)
         
-        # Format predicted steering display
-        if abs(pred_steering) < 1.0:
+        # Denormalize and format predicted steering display
+        pred_steering_denorm = denormalize_steering(pred_steering)
+        if abs(pred_steering_denorm) < 1.0:
             pred_steering_display = "Straight"
         else:
-            direction = "Left" if pred_steering > 0 else "Right"
-            pred_steering_display = f"{direction} {abs(pred_steering):.1f}"
+            direction = "Left" if pred_steering_denorm > 0 else "Right"
+            pred_steering_display = f"{direction} {abs(pred_steering_denorm):.1f}"
             
         # Add T+100ms prediction overlay (in green)
         cv2.putText(frame, f"Pred Speed: {pred_speed_mph:.1f}", (10, 100), 

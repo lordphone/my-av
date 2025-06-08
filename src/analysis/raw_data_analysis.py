@@ -87,11 +87,13 @@ def analyze_dataset(dataset_path):
         'mean': np.mean(all_steering),
         'std': np.std(all_steering),
         'min': np.min(all_steering),
+        '1%': np.percentile(all_steering, 1) if len(all_steering) > 0 else 0,
         '5%': np.percentile(all_steering, 5) if len(all_steering) > 0 else 0,
         '25%': np.percentile(all_steering, 25) if len(all_steering) > 0 else 0,
         '50%': np.percentile(all_steering, 50) if len(all_steering) > 0 else 0,
         '75%': np.percentile(all_steering, 75) if len(all_steering) > 0 else 0,
         '95%': np.percentile(all_steering, 95) if len(all_steering) > 0 else 0,
+        '99%': np.percentile(all_steering, 99) if len(all_steering) > 0 else 0,
         'max': np.max(all_steering) if len(all_steering) > 0 else 0,
     }
     
@@ -101,11 +103,13 @@ def analyze_dataset(dataset_path):
         'mean': np.mean(all_speed) if len(all_speed) > 0 else 0,
         'std': np.std(all_speed) if len(all_speed) > 0 else 0,
         'min': np.min(all_speed) if len(all_speed) > 0 else 0,
+        '1%': np.percentile(all_speed, 1) if len(all_speed) > 0 else 0,
         '5%': np.percentile(all_speed, 5) if len(all_speed) > 0 else 0,
         '25%': np.percentile(all_speed, 25) if len(all_speed) > 0 else 0,
         '50%': np.percentile(all_speed, 50) if len(all_speed) > 0 else 0,
         '75%': np.percentile(all_speed, 75) if len(all_speed) > 0 else 0,
         '95%': np.percentile(all_speed, 95) if len(all_speed) > 0 else 0,
+        '99%': np.percentile(all_speed, 99) if len(all_speed) > 0 else 0,
         'max': np.max(all_speed) if len(all_speed) > 0 else 0,
     }
     
@@ -122,23 +126,5 @@ def analyze_dataset(dataset_path):
     for stat, value in speed_stats.items():
         print(f"{stat}: {value:.4f}")
     
-    # Calculate and print normalization suggestions
-    print("\n" + "="*50)
-    print("NORMALIZATION SUGGESTIONS")
-    print("="*50)
-    
-    # For steering (suggested range: -1 to 1)
-    steering_max = max(abs(steering_stats['min']), abs(steering_stats['max']))
-    print(f"Steering normalization (to [-1, 1]):")
-    print(f"  - Use a scale factor of {steering_max:.4f} to normalize to [-1, 1]")
-    print(f"  - Or use min-max scaling with: (steering + {steering_max:.4f}) / {2*steering_max:.4f}")
-    
-    # For speed (suggested range: 0 to 1)
-    speed_min = speed_stats['min']
-    speed_max = speed_stats['max']
-    print(f"\nSpeed normalization (to [0, 1]):")
-    print(f"  - Use min-max scaling with: (speed - {speed_min:.4f}) / {speed_max - speed_min:.4f}")
-    print(f"  - Or use 95th percentile for more robust scaling: (speed - {speed_stats['5%']:.4f}) / ({speed_stats['95%'] - speed_stats['5%']:.4f})")
-
 if __name__ == "__main__":
     analyze_dataset("/home/lordphone/my-av/data/raw/comma2k19/")

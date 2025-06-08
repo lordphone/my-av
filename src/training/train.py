@@ -175,8 +175,8 @@ def train_model(
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
     # Loss weights
-    steering_weight = 1.0
-    speed_weight = 0.5
+    STEERING_WEIGHT = 1.0
+    SPEED_WEIGHT = 0.1
 
     # Gradient clipping
     max_grad_norm = 1.0
@@ -296,7 +296,7 @@ def train_model(
                 
                 loss_steering = criterion_steering(steering_pred, future_steering_targets)
                 loss_speed = criterion_speed(speed_pred, future_speed_targets)
-                loss = steering_weight * loss_steering + speed_weight * loss_speed
+                loss = STEERING_WEIGHT * loss_steering + SPEED_WEIGHT * loss_speed
                 
                 # Accumulate component losses for monitoring
                 running_steering_loss += loss_steering.item()
@@ -412,7 +412,7 @@ def train_model(
 
                 loss_steering = criterion_steering(steering_pred, future_steering_targets)
                 loss_speed = criterion_speed(speed_pred, future_speed_targets)
-                loss = steering_weight * loss_steering + speed_weight * loss_speed
+                loss = STEERING_WEIGHT * loss_steering + SPEED_WEIGHT * loss_speed
 
                 val_loss += loss.item()
                 

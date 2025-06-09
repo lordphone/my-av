@@ -106,9 +106,14 @@ def process_video_with_dataset(model_path, data_path, output_path, video_path):
     frame_reader = FrameReader(video_path)
     for i, frame in enumerate(frame_reader):
         frames.append(frame)
-    
+    frames = frames[2:target_length]
+
+    p_speed = [0, 0] + t_100ms_speed_preds[:-2]
+    p_steering = [0, 0] + t_100ms_steering_preds[:-2]
+
+
     # Create visualization video
-    create_visualization(frames, t_100ms_steering_preds, t_100ms_speed_preds, ground_truth, output_path)
+    create_visualization(frames, p_speed, p_steering, ground_truth, output_path)
     
     return t_100ms_steering_preds, t_100ms_speed_preds, ground_truth
 
@@ -200,11 +205,38 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
             direction = "Left" if pred_steering_denorm > 0 else "Right"
             pred_steering_display = f"{direction} {abs(pred_steering_denorm):.1f}"
             
-        # Add T+100ms prediction overlay (in green)
+        # Add T+100ms prediction overlay (in white)
         cv2.putText(frame, f"Pred Speed: {pred_speed_mph:.1f}", (10, 100), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(frame, f"Pred Steering: {pred_steering_display}", (10, 130), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        
+        # Add difference between ground truth and prediction, with color based on accuracy
+        diff_speed = gt_speed_mph - pred_speed_mph
+        diff_steering = gt_steering_denorm - pred_steering_denorm
+        
+        # Calculate absolute differences for color determination
+        abs_diff_speed = abs(diff_speed)
+        abs_diff_steering = abs(diff_steering)
+        
+        # Calculate speed percentage error
+        speed_percentage_error = (abs_diff_speed / gt_speed_mph * 100) if gt_speed_mph > 0 else 0
+        
+        # Determine color based on accuracy thresholds
+        # Green: steering within 1 degree AND speed within 10%
+        # Yellow: steering 1-5 degrees OR speed within 30%
+        # Red: steering above 5 degrees OR speed above 30%
+        if abs_diff_steering <= 1.0 and speed_percentage_error <= 10.0:
+            color = (0, 255, 0)  # Green
+        elif abs_diff_steering <= 5.0 and speed_percentage_error <= 30.0:
+            color = (0, 255, 255)  # Yellow (BGR format)
+        else:
+            color = (0, 0, 255)  # Red
+        
+        cv2.putText(frame, f"Diff Speed: {diff_speed:.1f}", (10, 160), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        cv2.putText(frame, f"Diff Steering: {diff_steering:.1f}", (10, 190), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
         
         out.write(frame)
     
@@ -217,7 +249,6 @@ if __name__ == "__main__":
 
     # Path to video (using raw string to handle special characters)
     video_path = r"/home/lordphone/my-av/data/evaluation/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/9/video.hevc"
-    
     
     # Path to data
     data_path = "/home/lordphone/my-av/data/evaluation/"

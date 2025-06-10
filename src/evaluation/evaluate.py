@@ -90,7 +90,8 @@ def process_video_with_dataset(model_path, data_path, output_path, video_path):
             veh_states = torch.tensor([[[current_gt_steering, current_gt_speed]]], dtype=torch.float32).to(device)
             
             # Get model predictions for 5 future time steps
-            pred_speed, pred_steering, hidden_state = model(frame_pair, veh_states, hidden_state)
+            # Model returns (steering, speed, hidden_state). Preserve this order
+            pred_steering, pred_speed, hidden_state = model(frame_pair, veh_states, hidden_state)
             
             # We only care about the T+100ms prediction (first value)
             t_100ms_steering = pred_steering.cpu().numpy()[0][0]  # First prediction only
@@ -123,13 +124,13 @@ def mps_to_mph(speed_mps):
 
 
 def denormalize_steering(steering_norm):
-    """Denormalize steering angle from [-1, 1] to [-20, 20] degrees"""
+    """Denormalize steering angle from [-1, 1] to [-25, 25] degrees"""
     STEER_CLIP = 25  # degrees
     return steering_norm * STEER_CLIP
 
 
 def denormalize_speed(speed_norm):
-    """Denormalize speed from [0, 1] to [0, 40] m/s"""
+    """Denormalize speed from [0, 1] to [0, 50] m/s"""
     SPEED_CLIP = 50  # m/s
     return speed_norm * SPEED_CLIP
 

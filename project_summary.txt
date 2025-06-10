@@ -1,0 +1,32 @@
+Autonomous Vehicle Prediction System - Project Summary
+--------------------------------------------------
+
+Core Objective:
+- Develop a system to predict future vehicle states (steering and speed) using visual and temporal data.
+
+Technical Stack:
+- Model Architecture: CNN (ResNet18) + GRU for temporal modeling
+- Input: 
+  - Visual: 20-frame sequences (1 second at 20fps)
+  - Frame pairs (i, i+2) with 100ms difference, stacked as 6 channels
+  - Vehicle state: Current speed and steering angle
+- Output: 5 future predictions for both steering (degrees) and speed (m/s) at 100ms intervals (T+100ms to T+500ms)
+
+Data Pipeline:
+- Dataset: Comma2k19
+- Processing:
+  - Non-overlapping 20-frame windows
+  - 18 valid frame pairs per window
+  - 240x320 pixel images
+  - 1200 frames per segment
+- Optimizations:
+  - Efficient caching (one video segment per DataLoader worker)
+  - Proper hidden state management in GRU
+
+Visualization:
+- Speed displayed in mph
+- Steering angle in degrees
+- Turn direction indicators (Left/Right/Straight)
+- Works with HEVC video format
+
+This system is designed for predicting near-future vehicle states, suitable for autonomous driving assistance or planning systems.

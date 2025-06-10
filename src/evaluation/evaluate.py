@@ -223,21 +223,28 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
         # Calculate speed percentage error
         speed_percentage_error = (abs_diff_speed / gt_speed_mph * 100) if gt_speed_mph > 0 else 0
         
-        # Determine color based on accuracy thresholds
-        # Green: steering within 1 degree AND speed within 10%
-        # Yellow: steering 1-5 degrees OR speed within 30%
-        # Red: steering above 5 degrees OR speed above 30%
-        if abs_diff_steering <= 1.0 and speed_percentage_error <= 10.0:
-            color = (0, 255, 0)  # Green
-        elif abs_diff_steering <= 5.0 and speed_percentage_error <= 30.0:
-            color = (0, 255, 255)  # Yellow (BGR format)
+        # Determine color for steering difference
+        # Green: within 1 degree, Yellow: 1-5 degrees, Red: above 5 degrees
+        if abs_diff_steering <= 1.0:
+            steering_color = (0, 255, 0)  # Green
+        elif abs_diff_steering <= 5.0:
+            steering_color = (0, 255, 255)  # Yellow (BGR format)
         else:
-            color = (0, 0, 255)  # Red
+            steering_color = (0, 0, 255)  # Red
+        
+        # Determine color for speed difference
+        # Green: within 10%, Yellow: 10-30%, Red: above 30%
+        if speed_percentage_error <= 10.0:
+            speed_color = (0, 255, 0)  # Green
+        elif speed_percentage_error <= 30.0:
+            speed_color = (0, 255, 255)  # Yellow (BGR format)
+        else:
+            speed_color = (0, 0, 255)  # Red
         
         cv2.putText(frame, f"Diff Speed: {diff_speed:.1f}", (10, 160), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, speed_color, 2)
         cv2.putText(frame, f"Diff Steering: {diff_steering:.1f}", (10, 190), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, steering_color, 2)
         
         out.write(frame)
     

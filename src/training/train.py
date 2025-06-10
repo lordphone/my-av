@@ -176,7 +176,7 @@ def train_model(
 
     # Loss weights
     STEERING_WEIGHT = 1.0
-    SPEED_WEIGHT = 3.0
+    SPEED_WEIGHT = 5.0
 
     # Gradient clipping
     max_grad_norm = 1.0

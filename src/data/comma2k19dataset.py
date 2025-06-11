@@ -46,7 +46,7 @@ class Comma2k19Dataset(torch.utils.data.Dataset):
                     if not os.path.exists(frame_times_path):
                         continue
                     frame_times = np.load(frame_times_path)
-                    if len(frame_times) < 1195:
+                    if len(frame_times) < 1190:
                         continue
                         
                     # Add to samples if it has the required data

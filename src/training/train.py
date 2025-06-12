@@ -53,7 +53,7 @@ def save_checkpoint(state, filename="checkpoint.pth"):
     logging.info(f"Saving checkpoint to {filename}")
     torch.save(state, filename)
 
-def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_speed_weight, smoothing_factor=0.1, steering_importance=2.0, speed_importance=1.0):
+def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_speed_weight, smoothing_factor=0.1, steering_importance=2.0, speed_importance=1.0, max_ratio=10.0):
     """
     Calculate dynamic weights based on loss history with normalization and importance preferences.
     
@@ -64,6 +64,7 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
         smoothing_factor: Factor for smoothing the weight updates (0 = no change, 1 = full change)
         steering_importance: Relative importance of steering (default: 2.0, meaning 2x more important than speed)
         speed_importance: Relative importance of speed (default: 1.0, baseline importance)
+        max_ratio: Maximum ratio between weights (default: 10.0, meaning one weight can't be more than 10x the other)
     
     Returns:
         tuple: (steering_weight, speed_weight)
@@ -118,16 +119,36 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     steering_weight = (steering_weight / current_sum) * TARGET_WEIGHT_SUM
     speed_weight = (speed_weight / current_sum) * TARGET_WEIGHT_SUM
     
-    # Ensure weights are within reasonable bounds while maintaining sum
-    min_weight = 0.5
-    max_weight = TARGET_WEIGHT_SUM - 0.5
+    # Apply relative ratio constraints to prevent one weight from dominating
+    # Ensure steering_weight / speed_weight and speed_weight / steering_weight are both <= max_ratio
     
-    steering_weight = max(min_weight, min(max_weight, steering_weight))
-    speed_weight = TARGET_WEIGHT_SUM - steering_weight  # Ensure exact sum
+    # First normalize to target sum
+    current_sum = steering_weight + speed_weight
+    if current_sum != TARGET_WEIGHT_SUM:
+        steering_weight = (steering_weight / current_sum) * TARGET_WEIGHT_SUM
+        speed_weight = (speed_weight / current_sum) * TARGET_WEIGHT_SUM
     
-    logging.info(f"Dynamic weights calculated - Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f} (Sum: {steering_weight + speed_weight:.4f})")
-    logging.info(f"Based on recent losses - Steering: {avg_steering_loss:.6f}, Speed: {avg_speed_loss:.6f}")
-    logging.info(f"Applied importance bias - Steering: {steering_importance:.1f}x, Speed: {speed_importance:.1f}x")
+    # Check and enforce ratio constraints
+    if steering_weight > 0 and speed_weight > 0:
+        steering_to_speed_ratio = steering_weight / speed_weight
+        speed_to_steering_ratio = speed_weight / steering_weight
+        
+        # If steering is more than max_ratio times speed, clamp it
+        if steering_to_speed_ratio > max_ratio:
+            steering_weight = speed_weight * max_ratio
+            logging.info(f"Clamped steering weight: ratio was {steering_to_speed_ratio:.2f}, max allowed is {max_ratio:.2f}")
+        
+        # If speed is more than max_ratio times steering, clamp it  
+        elif speed_to_steering_ratio > max_ratio:
+            speed_weight = steering_weight * max_ratio
+            logging.info(f"Clamped speed weight: ratio was {speed_to_steering_ratio:.2f}, max allowed is {max_ratio:.2f}")
+    
+    # Re-normalize to maintain target sum after ratio clamping
+    current_sum = steering_weight + speed_weight
+    steering_weight = (steering_weight / current_sum) * TARGET_WEIGHT_SUM
+    speed_weight = (speed_weight / current_sum) * TARGET_WEIGHT_SUM
+    
+    logging.info(f"Dynamic weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f} (sum={steering_weight + speed_weight:.4f}) | Based on losses Steering: {avg_steering_loss:.5f}, Speed: {avg_speed_loss:.5f} | Importance bias Steering: {steering_importance:.1f}x, Speed: {speed_importance:.1f}x")
     
     return steering_weight, speed_weight
 
@@ -255,7 +276,7 @@ def train_model(
     # Dynamic weight averaging initialization
     loss_history = []  # Store loss history for dynamic weight calculation
     STARTING_STEERING_WEIGHT = 1.0
-    STARTING_SPEED_WEIGHT = 1.0
+    STARTING_SPEED_WEIGHT = 0.5
     steering_weight = STARTING_STEERING_WEIGHT
     speed_weight = STARTING_SPEED_WEIGHT
 
@@ -441,7 +462,7 @@ def train_model(
                 f"Total Loss: {loss.item():.6f}, "
                 f"Steering Loss: {loss_steering.item():.6f}, "
                 f"Speed Loss: {loss_speed.item():.6f}, "
-                f"Weights: S{steering_weight:.3f}/Sp{speed_weight:.3f}, "
+                f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
                 f"LR: {current_lr:.8f}"
             )
             
@@ -534,7 +555,7 @@ def train_model(
                     f"Total Loss: {loss.item():.6f}, "
                     f"Steering Loss: {loss_steering.item():.6f}, "
                     f"Speed Loss: {loss_speed.item():.6f}, "
-                    f"Weights: S{steering_weight:.3f}/Sp{speed_weight:.3f}, "
+                    f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
                     f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
                 )
 
@@ -570,7 +591,7 @@ def train_model(
                 steering_importance=2.0,  # Steering is 2x more important than speed
                 speed_importance=1.0
             )
-            logging.info(f"Weight update for next epoch - Old: S{steering_weight:.4f}/Sp{speed_weight:.4f}, New: S{new_steering_weight:.4f}/Sp{new_speed_weight:.4f}")
+            logging.info(f"Weight update: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f} → Steering: {new_steering_weight:.4f}, Speed: {new_speed_weight:.4f}")
             steering_weight, speed_weight = new_steering_weight, new_speed_weight
         # --- End of Weight Update ---
 
@@ -580,10 +601,7 @@ def train_model(
         # Log epoch summary
         epoch_time = time.time() - epoch_start_time
         logging.info(f"Epoch [{epoch+1}/{num_epochs}] completed in {epoch_time:.2f} seconds")
-        logging.info(f"Avg Train Loss: {avg_train_loss:.4f}, Avg Val Loss: {avg_val_loss:.4f}")
-        logging.info(f"Train Component Losses - Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}")
-        logging.info(f"Val Component Losses - Steering: {avg_val_steering_loss:.4f}, Speed: {avg_val_speed_loss:.4f}")
-        logging.info(f"Total Train Loss: {running_loss:.4f}, Total Val Loss: {val_loss:.4f}")
+        logging.info(f"Epoch Summary - Average Train Loss: {avg_train_loss:.4f} (Steering: {avg_steering_loss:.4f}, Speed: {avg_speed_loss:.4f}) | Val Loss: {avg_val_loss:.4f} (Steering: {avg_val_steering_loss:.4f}, Speed: {avg_val_speed_loss:.4f})")
 
         # --- Checkpoint Saving ---
         is_best = avg_val_loss < best_val_loss
@@ -639,7 +657,7 @@ if __name__ == "__main__":
         if args.mode == 'train':
             args.epochs = 50
         else:  # test mode
-            args.epochs = 5
+            args.epochs = 10
     
     # Common parameters for both modes
     common_params = {

@@ -53,6 +53,84 @@ def save_checkpoint(state, filename="checkpoint.pth"):
     logging.info(f"Saving checkpoint to {filename}")
     torch.save(state, filename)
 
+def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_speed_weight, smoothing_factor=0.1, steering_importance=2.0, speed_importance=1.0):
+    """
+    Calculate dynamic weights based on loss history with normalization and importance preferences.
+    
+    Args:
+        loss_history: List of dictionaries containing 'steering_loss' and 'speed_loss' for each epoch
+        starting_steering_weight: Initial steering weight (used as default and for target sum)
+        starting_speed_weight: Initial speed weight (used as default and for target sum)
+        smoothing_factor: Factor for smoothing the weight updates (0 = no change, 1 = full change)
+        steering_importance: Relative importance of steering (default: 2.0, meaning 2x more important than speed)
+        speed_importance: Relative importance of speed (default: 1.0, baseline importance)
+    
+    Returns:
+        tuple: (steering_weight, speed_weight)
+    """
+    # Target sum for normalized weights based on starting weights
+    TARGET_WEIGHT_SUM = starting_steering_weight + starting_speed_weight
+    
+    if not loss_history:
+        # Return starting weights if no history
+        return starting_steering_weight, starting_speed_weight
+    
+    # Use the last 2 epochs if available, otherwise just the last epoch
+    recent_losses = loss_history[-2:] if len(loss_history) >= 2 else loss_history[-1:]
+    
+    # Calculate average losses over recent epochs
+    avg_steering_loss = sum(epoch['steering_loss'] for epoch in recent_losses) / len(recent_losses)
+    avg_speed_loss = sum(epoch['speed_loss'] for epoch in recent_losses) / len(recent_losses)
+    
+    # Prevent division by zero
+    if avg_steering_loss == 0 or avg_speed_loss == 0:
+        return starting_steering_weight, starting_speed_weight
+    
+    # Calculate weights inversely proportional to loss magnitudes
+    # Higher loss gets lower weight to balance the contributions
+    inv_steering_loss = 1.0 / avg_steering_loss
+    inv_speed_loss = 1.0 / avg_speed_loss
+    
+    # Apply importance preferences to bias the weights
+    # Higher importance means the loss gets more weight even when balanced
+    biased_steering_weight = inv_steering_loss * steering_importance
+    biased_speed_weight = inv_speed_loss * speed_importance
+    
+    # Calculate raw weights (normalized to sum to 1)
+    total_biased = biased_steering_weight + biased_speed_weight
+    raw_steering_weight = biased_steering_weight / total_biased
+    raw_speed_weight = biased_speed_weight / total_biased
+    
+    # Scale to target sum to maintain consistent magnitude
+    steering_weight = raw_steering_weight * TARGET_WEIGHT_SUM
+    speed_weight = raw_speed_weight * TARGET_WEIGHT_SUM
+    
+    # Apply smoothing to prevent dramatic weight changes
+    if len(loss_history) > 1:
+        prev_steering_weight = loss_history[-1].get('steering_weight', starting_steering_weight)
+        prev_speed_weight = loss_history[-1].get('speed_weight', starting_speed_weight)
+        
+        steering_weight = (1 - smoothing_factor) * prev_steering_weight + smoothing_factor * steering_weight
+        speed_weight = (1 - smoothing_factor) * prev_speed_weight + smoothing_factor * speed_weight
+    
+    # Normalize again after smoothing to ensure consistent sum
+    current_sum = steering_weight + speed_weight
+    steering_weight = (steering_weight / current_sum) * TARGET_WEIGHT_SUM
+    speed_weight = (speed_weight / current_sum) * TARGET_WEIGHT_SUM
+    
+    # Ensure weights are within reasonable bounds while maintaining sum
+    min_weight = 0.5
+    max_weight = TARGET_WEIGHT_SUM - 0.5
+    
+    steering_weight = max(min_weight, min(max_weight, steering_weight))
+    speed_weight = TARGET_WEIGHT_SUM - steering_weight  # Ensure exact sum
+    
+    logging.info(f"Dynamic weights calculated - Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f} (Sum: {steering_weight + speed_weight:.4f})")
+    logging.info(f"Based on recent losses - Steering: {avg_steering_loss:.6f}, Speed: {avg_speed_loss:.6f}")
+    logging.info(f"Applied importance bias - Steering: {steering_importance:.1f}x, Speed: {speed_importance:.1f}x")
+    
+    return steering_weight, speed_weight
+
 def train_model(
     dataset_path, 
     checkpoint_dir="checkpoints", # Directory to save checkpoints
@@ -174,9 +252,12 @@ def train_model(
     optimizer = optim.Adam(model.parameters(), lr)  # Reduced learning rate
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
-    # Loss weights
-    STEERING_WEIGHT = 1.0
-    SPEED_WEIGHT = 5.0
+    # Dynamic weight averaging initialization
+    loss_history = []  # Store loss history for dynamic weight calculation
+    STARTING_STEERING_WEIGHT = 1.0
+    STARTING_SPEED_WEIGHT = 1.0
+    steering_weight = STARTING_STEERING_WEIGHT
+    speed_weight = STARTING_SPEED_WEIGHT
 
     # Gradient clipping
     max_grad_norm = 1.0
@@ -223,6 +304,26 @@ def train_model(
         start_epoch = checkpoint['epoch']
         best_val_loss = checkpoint['best_val_loss']
         
+        # Load loss history and dynamic weights if available
+        if 'loss_history' in checkpoint:
+            loss_history = checkpoint['loss_history']
+            logging.info(f"Loaded loss history with {len(loss_history)} epochs")
+            
+            # Calculate current weights based on loaded history
+            if loss_history:
+                steering_weight, speed_weight = calculate_dynamic_weights(
+                    loss_history,
+                    STARTING_STEERING_WEIGHT,
+                    STARTING_SPEED_WEIGHT,
+                    steering_importance=2.0,  # Steering is 2x more important than speed
+                    speed_importance=1.0
+                )
+                logging.info(f"Resumed with dynamic weights - Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}")
+            else:
+                logging.info(f"Using starting weights - Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}")
+        else:
+            logging.info("No loss history found in checkpoint, starting with default weights")
+        
         # Load normalization constants if available (for backward compatibility)
         if 'normalization_mean' in checkpoint and 'normalization_std' in checkpoint:
             loaded_mean = checkpoint['normalization_mean']
@@ -246,6 +347,7 @@ def train_model(
 
     # Training loop
     logging.info(f"Starting training for {num_epochs} epochs.")
+    logging.info(f"Initial weights - Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}")
 
     # Log training start
     if debug:
@@ -255,6 +357,7 @@ def train_model(
     for epoch in range(start_epoch, num_epochs):
         epoch_start_time = time.time()
         logging.info(f"Starting epoch {epoch+1}/{num_epochs}")
+        logging.info(f"Current epoch weights - Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}")
         model.train()
         running_loss = 0.0
         
@@ -296,7 +399,8 @@ def train_model(
                 
                 loss_steering = criterion_steering(steering_pred, future_steering_targets)
                 loss_speed = criterion_speed(speed_pred, future_speed_targets)
-                loss = STEERING_WEIGHT * loss_steering + SPEED_WEIGHT * loss_speed
+                # Use dynamic weights
+                loss = steering_weight * loss_steering + speed_weight * loss_speed
                 
                 # Accumulate component losses for monitoring
                 running_steering_loss += loss_steering.item()
@@ -337,6 +441,7 @@ def train_model(
                 f"Total Loss: {loss.item():.6f}, "
                 f"Steering Loss: {loss_steering.item():.6f}, "
                 f"Speed Loss: {loss_speed.item():.6f}, "
+                f"Weights: S{steering_weight:.3f}/Sp{speed_weight:.3f}, "
                 f"LR: {current_lr:.8f}"
             )
             
@@ -412,7 +517,8 @@ def train_model(
 
                 loss_steering = criterion_steering(steering_pred, future_steering_targets)
                 loss_speed = criterion_speed(speed_pred, future_speed_targets)
-                loss = STEERING_WEIGHT * loss_steering + SPEED_WEIGHT * loss_speed
+                # Use dynamic weights
+                loss = steering_weight * loss_steering + speed_weight * loss_speed
 
                 val_loss += loss.item()
                 
@@ -428,6 +534,7 @@ def train_model(
                     f"Total Loss: {loss.item():.6f}, "
                     f"Steering Loss: {loss_steering.item():.6f}, "
                     f"Speed Loss: {loss_speed.item():.6f}, "
+                    f"Weights: S{steering_weight:.3f}/Sp{speed_weight:.3f}, "
                     f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
                 )
 
@@ -438,6 +545,34 @@ def train_model(
         avg_val_steering_loss = val_steering_loss / len(val_loader)
         avg_val_speed_loss = val_speed_loss / len(val_loader)
         # --- End of Validation Phase ---
+
+        # --- Update Loss History and Calculate New Weights ---
+        # Store this epoch's losses and weights in history
+        epoch_loss_info = {
+            'epoch': epoch + 1,
+            'train_steering_loss': avg_steering_loss,
+            'train_speed_loss': avg_speed_loss,
+            'val_steering_loss': avg_val_steering_loss,
+            'val_speed_loss': avg_val_speed_loss,
+            'steering_loss': avg_val_steering_loss,  # Use validation loss for weight calculation
+            'speed_loss': avg_val_speed_loss,
+            'steering_weight': steering_weight,
+            'speed_weight': speed_weight
+        }
+        loss_history.append(epoch_loss_info)
+        
+        # Calculate new weights for the next epoch based on validation losses
+        if epoch + 1 < num_epochs:  # Only calculate new weights if there are more epochs
+            new_steering_weight, new_speed_weight = calculate_dynamic_weights(
+                loss_history,
+                STARTING_STEERING_WEIGHT,
+                STARTING_SPEED_WEIGHT,
+                steering_importance=2.0,  # Steering is 2x more important than speed
+                speed_importance=1.0
+            )
+            logging.info(f"Weight update for next epoch - Old: S{steering_weight:.4f}/Sp{speed_weight:.4f}, New: S{new_steering_weight:.4f}/Sp{new_speed_weight:.4f}")
+            steering_weight, speed_weight = new_steering_weight, new_speed_weight
+        # --- End of Weight Update ---
 
         # Update learning rate
         scheduler.step(avg_val_loss)
@@ -462,6 +597,7 @@ def train_model(
                 'normalization_mean': normalization_mean,
                 'normalization_std': normalization_std,
                 'val_loss': avg_val_loss,
+                'loss_history': loss_history,  # Save loss history in best model too
             }, best_model_path)
         
         # Save the latest checkpoint including optimizer state etc.
@@ -474,6 +610,7 @@ def train_model(
             'best_val_loss': best_val_loss,
             'normalization_mean': normalization_mean,
             'normalization_std': normalization_std,
+            'loss_history': loss_history,  # Save loss history for dynamic weight calculation
         }, filename=latest_checkpoint_path)
         # --- End of Checkpoint Saving ---
         

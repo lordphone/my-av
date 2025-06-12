@@ -529,17 +529,19 @@ def train_model(
                 # Reset hidden state for each validation batch
                 hidden_state = None
 
-                # Pass both frames and vehicle states to the model
-                steering_pred, speed_pred, _ = model(frames, veh_states, hidden_state)
-                
-                # Use the actual future ground truth values from the dataset
-                future_steering_targets = data['future_steering'].to(device)  # [batch_size, 5]
-                future_speed_targets = data['future_speed'].to(device)  # [batch_size, 5]
+                # Forward pass with mixed precision for validation
+                with autocast(device_type='cuda'):
+                    # Pass both frames and vehicle states to the model
+                    steering_pred, speed_pred, _ = model(frames, veh_states, hidden_state)
+                    
+                    # Use the actual future ground truth values from the dataset
+                    future_steering_targets = data['future_steering'].to(device)  # [batch_size, 5]
+                    future_speed_targets = data['future_speed'].to(device)  # [batch_size, 5]
 
-                loss_steering = criterion_steering(steering_pred, future_steering_targets)
-                loss_speed = criterion_speed(speed_pred, future_speed_targets)
-                # Use dynamic weights
-                loss = steering_weight * loss_steering + speed_weight * loss_speed
+                    loss_steering = criterion_steering(steering_pred, future_steering_targets)
+                    loss_speed = criterion_speed(speed_pred, future_speed_targets)
+                    # Use dynamic weights
+                    loss = steering_weight * loss_steering + speed_weight * loss_speed
 
                 val_loss += loss.item()
                 

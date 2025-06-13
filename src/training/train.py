@@ -87,15 +87,15 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     if avg_steering_loss == 0 or avg_speed_loss == 0:
         return starting_steering_weight, starting_speed_weight
     
-    # Calculate weights inversely proportional to loss magnitudes
-    # Higher loss gets lower weight to balance the contributions
-    inv_steering_loss = 1.0 / avg_steering_loss
-    inv_speed_loss = 1.0 / avg_speed_loss
+    # Calculate weights directly proportional to loss magnitudes
+    # Higher loss gets higher weight to focus more on that component
+    direct_steering_loss = avg_steering_loss
+    direct_speed_loss = avg_speed_loss
     
     # Apply importance preferences to bias the weights
     # Higher importance means the loss gets more weight even when balanced
-    biased_steering_weight = inv_steering_loss * steering_importance
-    biased_speed_weight = inv_speed_loss * speed_importance
+    biased_steering_weight = direct_steering_loss * steering_importance
+    biased_speed_weight = direct_speed_loss * speed_importance
     
     # Calculate raw weights (normalized to sum to 1)
     total_biased = biased_steering_weight + biased_speed_weight

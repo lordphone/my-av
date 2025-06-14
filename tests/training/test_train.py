@@ -30,6 +30,7 @@ class TestTrainModel(unittest.TestCase):
                 target_length=1200,  # Length of each segment in frames
                 stride=20,  # Non-overlapping windows
                 batch_size=20,  # Batch size
+                num_workers=2,  # Use two workers for tests
                 num_epochs=5,  # Reduced for testing
                 lr=0.0001,  # Learning rate
                 img_size=(240, 320),  # Image dimensions

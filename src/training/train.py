@@ -651,7 +651,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
     parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
     parser.add_argument('--num-workers', type=int, default=2, help='Number of DataLoader worker processes')
-    parser.add_argument('--dataset-path', type=str, default=None, help='Path to dataset')
+    parser.add_argument('--dataset-path', type=str, required=True, help='Path to dataset')
     parser.add_argument('--checkpoint-dir', type=str, default='checkpoints', help='Directory to store checkpoints')
     parser.add_argument('--model-dir', type=str, default='models', help='Directory to store trained models')
     parser.add_argument('--log-dir', type=str, default='logs', help='Directory to store logs')
@@ -675,12 +675,6 @@ if __name__ == "__main__":
         'window_size': args.window_size,
         'num_workers': args.num_workers
     }
-    
-    if args.dataset_path is None:
-        if args.mode == 'train':
-            args.dataset_path = "/home/lordphone/my-av/data/raw/comma2k19"
-        else:
-            args.dataset_path = "/home/lordphone/my-av/tests/data"
 
     if args.mode == 'train':
         # Real training mode - use full dataset

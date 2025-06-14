@@ -160,7 +160,8 @@ def train_model(
     target_length=1200,  # Length of each segment in frames
     stride=20,  # Non-overlapping windows
     batch_size=16, 
-    num_epochs=30, 
+    num_epochs=30,
+    num_workers=2,
     lr=0.0001,
     img_size=(240, 320),  # Image dimensions
     frame_delay=2,  # Frames for T-100ms lookback (2 for 100ms at 20fps)
@@ -215,8 +216,8 @@ def train_model(
     if debug:
         logging.info(f"Train videos: {len(train_videos_indices)}, Val videos: {len(val_videos_indices)}")
 
-    # Number of workers to use for data loading
-    num_workers = 2  # Adjust based on your system's CPU cores
+    # Number of workers to use for data loading is controlled by the
+    # num_workers function argument so it can be tuned for the available hardware
     
     # Store normalization constants for inference
     normalization_mean = processed_dataset.preprocessor.transform.transforms[-1].mean
@@ -230,7 +231,7 @@ def train_model(
         train_dataset,
         batch_size=batch_size,  # Now works as expected
         num_workers=num_workers,
-        persistent_workers=True,
+        persistent_workers=num_workers > 0,
         pin_memory=True
     )
 
@@ -238,7 +239,7 @@ def train_model(
         val_dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        persistent_workers=True,
+        persistent_workers=num_workers > 0,
         pin_memory=True
     )
 
@@ -651,6 +652,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, help='Number of epochs to train (default: 30 for train, 5 for test)')
     parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
     parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
+    parser.add_argument('--num-workers', type=int, default=2, help='Number of DataLoader worker processes')
     
     args = parser.parse_args()
     
@@ -666,7 +668,8 @@ if __name__ == "__main__":
         'debug': args.debug,
         'num_epochs': args.epochs,
         'batch_size': args.batch_size,
-        'window_size': args.window_size
+        'window_size': args.window_size,
+        'num_workers': args.num_workers
     }
     
     if args.mode == 'train':

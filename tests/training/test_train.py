@@ -24,6 +24,8 @@ class TestTrainModel(unittest.TestCase):
             # Call train_model with all the explicit parameters
             model = train_model(
                 dataset_path=self.dataset_path,
+                checkpoint_dir="checkpoints",
+                model_dir="models",
                 window_size=20,  # For 1s of driving data at 20fps
                 target_length=1200,  # Length of each segment in frames
                 stride=20,  # Non-overlapping windows
@@ -40,7 +42,7 @@ class TestTrainModel(unittest.TestCase):
             )
             
             self.assertIsNotNone(model, "Model should not be None after training.")
-            saved_model_path = 'models/best_model.pth'
+            saved_model_path = os.path.join('models', 'best_model.pth')
             self.assertTrue(os.path.exists(saved_model_path), "Best model file should be saved.")
             end_time = time.time()
             print(f"Training completed in {end_time - start_time:.2f} seconds.")

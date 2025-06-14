@@ -25,17 +25,17 @@ from src.data.video_window_dataset import VideoWindowIterableDataset
 from collections import OrderedDict
 import src.utils.data_utils as data_utils
 
-def setup_logging():
+def setup_logging(log_dir="logs"):
     """Initialize logging configuration."""
     # Ensure logs directory exists
-    os.makedirs("logs", exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
     
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join("logs", f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
+            logging.FileHandler(os.path.join(log_dir, f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
             logging.StreamHandler()
         ],
         force=True  # Override any existing handlers
@@ -87,15 +87,15 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     if avg_steering_loss == 0 or avg_speed_loss == 0:
         return starting_steering_weight, starting_speed_weight
     
-    # Calculate weights inversely proportional to loss magnitudes
-    # Higher loss gets lower weight to balance the contributions
-    inv_steering_loss = 1.0 / avg_steering_loss
-    inv_speed_loss = 1.0 / avg_speed_loss
+    # Calculate weights directly proportional to loss magnitudes
+    # Higher loss gets higher weight to focus more on that component
+    direct_steering_loss = avg_steering_loss
+    direct_speed_loss = avg_speed_loss
     
     # Apply importance preferences to bias the weights
     # Higher importance means the loss gets more weight even when balanced
-    biased_steering_weight = inv_steering_loss * steering_importance
-    biased_speed_weight = inv_speed_loss * speed_importance
+    biased_steering_weight = direct_steering_loss * steering_importance
+    biased_speed_weight = direct_speed_loss * speed_importance
     
     # Calculate raw weights (normalized to sum to 1)
     total_biased = biased_steering_weight + biased_speed_weight
@@ -153,9 +153,10 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     return steering_weight, speed_weight
 
 def train_model(
-    dataset_path, 
-    checkpoint_dir="checkpoints", # Directory to save checkpoints
-    resume_from=None, # Path to resume from checkpoint
+    dataset_path,
+    checkpoint_dir="checkpoints",  # Directory to save checkpoints
+    model_dir="models",  # Directory to save models
+    resume_from=None,  # Path to resume from checkpoint
     window_size=20,  # For 1s of driving data at 20fps
     target_length=1200,  # Length of each segment in frames
     stride=20,  # Non-overlapping windows
@@ -179,7 +180,6 @@ def train_model(
         logging.info(f"Created checkpoint directory: {checkpoint_dir}")
 
     # Create model directory if it doesn't exist
-    model_dir = "models"  # Directory to save models
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
         logging.info(f"Created model directory: {model_dir}")
@@ -640,10 +640,8 @@ def train_model(
 
 if __name__ == "__main__":
     # Initialize logging
-    logger = setup_logging()
-    
     import argparse
-    
+
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(description='Train the model in different modes')
     parser.add_argument('--mode', type=str, choices=['train', 'test'], default='train',
@@ -653,8 +651,14 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
     parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
     parser.add_argument('--num-workers', type=int, default=2, help='Number of DataLoader worker processes')
-    
+    parser.add_argument('--dataset-path', type=str, default=None, help='Path to dataset')
+    parser.add_argument('--checkpoint-dir', type=str, default='checkpoints', help='Directory to store checkpoints')
+    parser.add_argument('--model-dir', type=str, default='models', help='Directory to store trained models')
+    parser.add_argument('--log-dir', type=str, default='logs', help='Directory to store logs')
     args = parser.parse_args()
+
+    # Initialize logging using provided log directory
+    logger = setup_logging(args.log_dir)
     
     # Set default epochs based on mode if not specified
     if args.epochs is None:
@@ -672,22 +676,29 @@ if __name__ == "__main__":
         'num_workers': args.num_workers
     }
     
+    if args.dataset_path is None:
+        if args.mode == 'train':
+            args.dataset_path = "/home/lordphone/my-av/data/raw/comma2k19"
+        else:
+            args.dataset_path = "/home/lordphone/my-av/tests/data"
+
     if args.mode == 'train':
         # Real training mode - use full dataset
         logger.info(f"Starting real training mode with full dataset (epochs: {args.epochs})")
-        
+
         # Check for existing checkpoint
-        checkpoint_dir = "checkpoints"
-        latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
+        latest_checkpoint_path = os.path.join(args.checkpoint_dir, 'latest_checkpoint.pth')
         resume_from = latest_checkpoint_path if os.path.exists(latest_checkpoint_path) else None
-        
+
         if resume_from:
             logger.info(f"Resuming training from checkpoint: {resume_from}")
         else:
             logger.info("No checkpoint found. Starting training from scratch.")
-        
+
         train_model(
-            dataset_path="/home/lordphone/my-av/data/raw/comma2k19",
+            dataset_path=args.dataset_path,
+            checkpoint_dir=args.checkpoint_dir,
+            model_dir=args.model_dir,
             resume_from=resume_from,
             **common_params
         )
@@ -695,6 +706,8 @@ if __name__ == "__main__":
         # Test training mode - use test dataset
         logging.info(f"Starting test training mode with test dataset (epochs: {args.epochs})")
         train_model(
-            dataset_path="/home/lordphone/my-av/tests/data",
+            dataset_path=args.dataset_path,
+            checkpoint_dir=args.checkpoint_dir,
+            model_dir=args.model_dir,
             **common_params
         )

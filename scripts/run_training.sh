@@ -33,6 +33,13 @@ if [[ -z "$DATASET_PATH" ]]; then
   exit 1
 fi
 
+if [[ ! -d "$DATASET_PATH" ]]; then
+  echo "Dataset path '$DATASET_PATH' does not exist" >&2
+  exit 1
+fi
+
+echo "Using dataset at $DATASET_PATH"
+
 CMD=(python3 -m src.training.train \
   --mode train \
   --dataset-path "$DATASET_PATH" \

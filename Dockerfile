@@ -9,4 +9,4 @@ SHELL ["conda", "run", "-n", "ml", "/bin/bash", "-c"]
 
 COPY . .
 
-CMD ["bash", "scripts/run_training.sh"]
+CMD ["conda", "run", "--no-capture-output", "-n", "ml", "bash", "scripts/run_training.sh"]

@@ -1,6 +1,7 @@
 import unittest
 import time
 import os
+from pathlib import Path
 import torch
 
 from src.training.train import train_model
@@ -9,8 +10,8 @@ from src.data.comma2k19dataset import Comma2k19Dataset
 class TestTrainModel(unittest.TestCase):
 
     def setUp(self):
-        # Set up temporary dataset path and mock data
-        self.dataset_path = "/home/lordphone/my-av/tests/data"
+        # Set up dataset path relative to this file
+        self.dataset_path = Path(__file__).resolve().parents[1] / "data"
         os.makedirs(self.dataset_path, exist_ok=True)
 
     def test_train(self):

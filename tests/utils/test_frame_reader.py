@@ -1,13 +1,15 @@
 import sys
 import os
+from pathlib import Path
 import unittest
 from src.utils.frame_reader import FrameReader
 
 
 class TestFrameReader(unittest.TestCase):
     def setUp(self):
-        self.video_path = "/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.hevc"
-        self.reader = FrameReader(self.video_path)
+        self.data_dir = Path(__file__).resolve().parents[1] / "data"
+        self.video_path = self.data_dir / "Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.hevc"
+        self.reader = FrameReader(str(self.video_path))
     
     def test_basic_functionality(self):
         """Test the basic functionality of the FrameReader."""
@@ -126,14 +128,14 @@ class TestFrameReader(unittest.TestCase):
         import matplotlib.pyplot as plt
 
         frame_idx = 10  # Choose a specific frame index
-        output_path = "/home/lordphone/my-av/tests/data/saved_frame.png"
+        output_path = self.data_dir / "saved_frame.png"
 
         try:
             # Retrieve the frame
             frame = self.reader.get(frame_idx)
 
             # Save the frame as a PNG file using matplotlib
-            plt.imsave(output_path, frame)
+            plt.imsave(str(output_path), frame)
 
             # Verify the file was created
             self.assertTrue(os.path.exists(output_path))

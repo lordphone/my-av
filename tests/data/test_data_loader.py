@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from src.data.data_loader import create_data_loader
 from src.data.comma2k19dataset import Comma2k19Dataset
 from torch.utils.data import DataLoader
@@ -6,8 +7,8 @@ from torch.utils.data import DataLoader
 class TestDataLoader(unittest.TestCase):
 
     def setUp(self):
-        # Set up a temporary dataset path for testing
-        self.data_path = "tests/data/sample_dataset"
+        # Set up a dataset path relative to this file
+        self.data_path = Path(__file__).resolve().parent / "sample_dataset"
         self.batch_size = 4
         self.shuffle = False
         self.num_workers = 2

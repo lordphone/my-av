@@ -1,5 +1,6 @@
 import unittest
 import time
+from pathlib import Path
 import torch
 
 from src.data.comma2k19dataset import Comma2k19Dataset
@@ -8,8 +9,8 @@ from src.data.processed_dataset import ProcessedDataset
 
 class TestProcessedDataset(unittest.TestCase):
     def setUp(self):
-        self.base_dataset_path = '/home/lordphone/my-av/tests/data'
-        self.base_dataset = Comma2k19Dataset(self.base_dataset_path)
+        self.base_dataset_path = Path(__file__).resolve().parent
+        self.base_dataset = Comma2k19Dataset(str(self.base_dataset_path))
         self.batch_size = 8
         self.window_size = 20  # Updated to match the 1s of driving data requirement
         self.target_length = 1200

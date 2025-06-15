@@ -1,9 +1,10 @@
 import unittest
+from pathlib import Path
 from src.data.comma2k19dataset import Comma2k19Dataset
 
 class TestComma2k19Dataset(unittest.TestCase):
 
-    BASE_PATH = "/home/lordphone/my-av/data/raw/comma2k19"
+    BASE_PATH = Path(__file__).resolve().parents[1] / "data/raw/comma2k19"
 
     def test_dataset_initialization(self):
         # Initialize the dataset

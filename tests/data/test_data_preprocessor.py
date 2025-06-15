@@ -3,6 +3,7 @@ import torch
 import os
 import numpy as np
 import time
+from pathlib import Path
 from src.data.data_preprocessor import DataPreprocessor
 
 class TestDataPreprocessor(unittest.TestCase):
@@ -10,10 +11,11 @@ class TestDataPreprocessor(unittest.TestCase):
     def setUpClass(self):
         """Set up test fixtures - run preprocessing once and store the results for all tests"""
         self.data_preprocessor = DataPreprocessor(img_size=(240, 320))
+        base_dir = Path(__file__).resolve().parent / "Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3"
         self.segment_data = {
-            'video_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/video.hevc',
-            'log_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/processed_log',
-            'pose_path': '/home/lordphone/my-av/tests/data/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/3/global_pose'
+            'video_path': str(base_dir / 'video.hevc'),
+            'log_path': str(base_dir / 'processed_log'),
+            'pose_path': str(base_dir / 'global_pose')
         }
         
         # Process data once for all tests

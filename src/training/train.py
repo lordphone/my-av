@@ -454,23 +454,22 @@ def train_model(
             
             # Set the start time for the next batch data loading
             next_data_loading_start_time = model_end_time
-
-            # Log detailed batch information
-            current_lr = optimizer.param_groups[0]['lr']
-            logging.info(
-                f"Epoch: {epoch+1:03d}/{num_epochs}, "
-                f"Batch: {i+1:05d}/{len(train_loader)}, "
-                f"Total Loss: {loss.item():.6f}, "
-                f"Steering Loss: {loss_steering.item():.6f}, "
-                f"Speed Loss: {loss_speed.item():.6f}, "
-                f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
-                f"LR: {current_lr:.8f}"
-            )
             
             running_loss += loss.item()
 
             # Log progress every 1000 batches
             if (i + 1) % log_interval == 0:
+                # Log detailed batch information
+                current_lr = optimizer.param_groups[0]['lr']
+                logging.info(
+                    f"Epoch: {epoch+1:03d}/{num_epochs}, "
+                    f"Batch: {i+1:05d}/{len(train_loader)}, "
+                    f"Total Loss: {loss.item():.6f}, "
+                    f"Steering Loss: {loss_steering.item():.6f}, "
+                    f"Speed Loss: {loss_speed.item():.6f}, "
+                    f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
+                    f"LR: {current_lr:.8f}"
+                )
                 batch_time = time.time()
                 batches_processed = i + 1
                 total_batches = len(train_loader)
@@ -550,17 +549,18 @@ def train_model(
                 val_steering_loss += loss_steering.item()
                 val_speed_loss += loss_speed.item()
 
-                # Log detailed batch information for validation
-                current_val_lr = optimizer.param_groups[0]['lr'] if hasattr(optimizer, 'param_groups') else None
-                logging.info(
-                    f"Validation - Epoch: {epoch+1:03d}/{num_epochs}, "
-                    f"Batch: {val_i+1:05d}/{len(val_loader)}, "
-                    f"Total Loss: {loss.item():.6f}, "
-                    f"Steering Loss: {loss_steering.item():.6f}, "
-                    f"Speed Loss: {loss_speed.item():.6f}, "
-                    f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
-                    f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
-                )
+                # Log detailed batch information for validation every 1000 batches
+                if (val_i + 1) % log_interval == 0:
+                    current_val_lr = optimizer.param_groups[0]['lr'] if hasattr(optimizer, 'param_groups') else None
+                    logging.info(
+                        f"Validation - Epoch: {epoch+1:03d}/{num_epochs}, "
+                        f"Batch: {val_i+1:05d}/{len(val_loader)}, "
+                        f"Total Loss: {loss.item():.6f}, "
+                        f"Steering Loss: {loss_steering.item():.6f}, "
+                        f"Speed Loss: {loss_speed.item():.6f}, "
+                        f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
+                        f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
+                    )
 
         # Calculate average validation loss
         avg_val_loss = val_loss / len(val_loader)  # Mean across batches, no need to divide by batch_size again

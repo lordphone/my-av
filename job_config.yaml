@@ -1,0 +1,29 @@
+jobSpec:
+  workerPoolSpecs:
+  - machineSpec:
+      machineType: n1-highmem-8
+      acceleratorType: NVIDIA_TESLA_V100
+      acceleratorCount: 1
+    replicaCount: 1
+    containerSpec:
+      imageUri: us-central1-docker.pkg.dev/my-av-462300/my-av/av-training:latest
+      args:
+      - "--dataset-path"
+      - "gs://my-av/datasets/comma2k19"  # Replace with your bucket
+      - "--checkpoint-dir" 
+      - "gs://my-av/checkpoints"         # Replace with your bucket
+      - "--model-dir"
+      - "gs://my-av/models"              # Replace with your bucket
+      - "--log-dir"
+      - "gs://my-av/logs"                # Replace with your bucket
+      - "--batch-size"
+      - "32"
+      - "--num-workers" 
+      - "4"
+      - "--epochs"
+      - "10"
+      - "--mode"
+      - "train"
+    diskSpec:
+      bootDiskType: pd-ssd
+      bootDiskSizeGb: 100 

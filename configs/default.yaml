@@ -7,6 +7,6 @@ train:
   epochs: 30
   window_size: 20
 runtime:
-  device: auto  # auto|cpu|cuda|mps
+  device: cuda
   log_interval: 1000
 

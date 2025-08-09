@@ -1,6 +1,8 @@
 # train.py
 # training script
 import os
+from pathlib import Path
+import yaml
 import logging
 import datetime
 import random
@@ -24,6 +26,56 @@ from src.data.video_batch_sampler import VideoBatchSampler
 from src.data.video_window_dataset import VideoWindowIterableDataset
 from collections import OrderedDict
 import src.utils.data_utils as data_utils
+
+def deep_update(base: dict, override: dict) -> dict:
+    """Recursively merge override into base (in-place) and return base."""
+    if not isinstance(base, dict) or not isinstance(override, dict):
+        return override
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_update(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+def load_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    with path.open("r") as f:
+        data = yaml.safe_load(f)
+        return data or {}
+
+def load_config(config_name_or_path: str) -> dict:
+    """Load base config and overlay with a named or file-based config."""
+    configs_dir = Path("configs")
+    base_cfg = load_yaml(configs_dir / "default.yaml")
+    overlay_path = Path(config_name_or_path)
+    if overlay_path.exists():
+        overlay_cfg = load_yaml(overlay_path)
+    else:
+        overlay_cfg = load_yaml(configs_dir / f"{config_name_or_path}.yaml")
+    return deep_update(base_cfg, overlay_cfg)
+
+def apply_env_overrides(cfg: dict) -> None:
+    """Apply selected environment variables into the config tree with basic casting."""
+    mapping = {
+        "AV_DATASET_PATH": (("data", "dataset_path"), str),
+        "AV_NUM_WORKERS": (("data", "num_workers"), int),
+        "AV_BATCH_SIZE": (("train", "batch_size"), int),
+        "AV_EPOCHS": (("train", "epochs"), int),
+        "AV_DEVICE": (("runtime", "device"), str),
+        "AV_LOG_INTERVAL": (("runtime", "log_interval"), int),
+    }
+    for env_key, (path_keys, caster) in mapping.items():
+        if env_key in os.environ:
+            node = cfg
+            for key in path_keys[:-1]:
+                node = node.setdefault(key, {})
+            raw_val = os.environ[env_key]
+            try:
+                node[path_keys[-1]] = caster(raw_val)
+            except Exception:
+                node[path_keys[-1]] = raw_val
 
 def setup_logging(log_dir="logs"):
     """Initialize logging configuration."""
@@ -646,12 +698,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train the model in different modes')
     parser.add_argument('--mode', type=str, choices=['train', 'test'], default='train',
                         help='Training mode: "train" for real training, "test" for test training')
+    parser.add_argument('--config', type=str, default=None,
+                        help='Config profile name (e.g., local, cloud) or path to YAML file')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--epochs', type=int, help='Number of epochs to train (default: 30 for train, 5 for test)')
     parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
     parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
     parser.add_argument('--num-workers', type=int, default=2, help='Number of DataLoader worker processes')
-    parser.add_argument('--dataset-path', type=str, required=True, help='Path to dataset')
+    parser.add_argument('--dataset-path', type=str, required=False, help='Path to dataset (overrides config)')
     parser.add_argument('--checkpoint-dir', type=str, default='checkpoints', help='Directory to store checkpoints')
     parser.add_argument('--model-dir', type=str, default='models', help='Directory to store trained models')
     parser.add_argument('--log-dir', type=str, default='logs', help='Directory to store logs')
@@ -667,18 +721,46 @@ if __name__ == "__main__":
         else:  # test mode
             args.epochs = 10
     
+    # Load and resolve configuration
+    resolved_cfg: dict = {}
+    if args.config:
+        try:
+            resolved_cfg = load_config(args.config)
+        except Exception as e:
+            logging.warning(f"Failed to load config '{args.config}': {e}")
+            resolved_cfg = {}
+    apply_env_overrides(resolved_cfg)
+
+    # Resolve effective parameters with precedence: CLI > env-applied config > defaults
+    def cfg_get(path, default=None):
+        node = resolved_cfg
+        for key in path:
+            if not isinstance(node, dict) or key not in node:
+                return default
+            node = node[key]
+        return node
+
+    effective_dataset_path = args.dataset_path or cfg_get(["data", "dataset_path"]) or None
+    effective_num_workers = args.num_workers if args.num_workers is not None else cfg_get(["data", "num_workers"], 2)
+    effective_batch_size = args.batch_size if args.batch_size is not None else cfg_get(["train", "batch_size"], 16)
+    effective_window_size = args.window_size if args.window_size is not None else cfg_get(["train", "window_size"], 20)
+    effective_epochs = args.epochs if args.epochs is not None else cfg_get(["train", "epochs"], 30)
+
     # Common parameters for both modes
     common_params = {
         'debug': args.debug,
-        'num_epochs': args.epochs,
-        'batch_size': args.batch_size,
-        'window_size': args.window_size,
-        'num_workers': args.num_workers
+        'num_epochs': effective_epochs,
+        'batch_size': effective_batch_size,
+        'window_size': effective_window_size,
+        'num_workers': effective_num_workers,
     }
 
     if args.mode == 'train':
         # Real training mode - use full dataset
         logger.info(f"Starting real training mode with full dataset (epochs: {args.epochs})")
+
+        if not effective_dataset_path:
+            raise SystemExit("Dataset path must be provided via --dataset-path or config data.dataset_path")
 
         # Check for existing checkpoint
         latest_checkpoint_path = os.path.join(args.checkpoint_dir, 'latest_checkpoint.pth')
@@ -690,7 +772,7 @@ if __name__ == "__main__":
             logger.info("No checkpoint found. Starting training from scratch.")
 
         train_model(
-            dataset_path=args.dataset_path,
+            dataset_path=effective_dataset_path,
             checkpoint_dir=args.checkpoint_dir,
             model_dir=args.model_dir,
             resume_from=resume_from,
@@ -699,8 +781,10 @@ if __name__ == "__main__":
     else:
         # Test training mode - use test dataset
         logging.info(f"Starting test training mode with test dataset (epochs: {args.epochs})")
+        if not effective_dataset_path:
+            raise SystemExit("Dataset path must be provided via --dataset-path or config data.dataset_path")
         train_model(
-            dataset_path=args.dataset_path,
+            dataset_path=effective_dataset_path,
             checkpoint_dir=args.checkpoint_dir,
             model_dir=args.model_dir,
             **common_params

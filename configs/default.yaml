@@ -1,0 +1,12 @@
+seed: 42
+data:
+  dataset_path: ""
+  num_workers: 2
+train:
+  batch_size: 16
+  epochs: 30
+  window_size: 20
+runtime:
+  device: auto  # auto|cpu|cuda|mps
+  log_interval: 1000
+

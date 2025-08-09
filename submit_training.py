@@ -35,6 +35,7 @@ def submit_training_job():
     job.run(
         args=[
             "--dataset-path", DATASET_PATH,
+            "--config", "cloud",
             "--checkpoint-dir", CHECKPOINT_DIR,
             "--model-dir", MODEL_DIR,
             "--log-dir", LOG_DIR,

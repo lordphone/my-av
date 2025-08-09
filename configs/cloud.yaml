@@ -1,0 +1,10 @@
+data:
+  dataset_path: "gs://my-av/datasets/comma2k19"
+  num_workers: 8
+train:
+  batch_size: 64
+  epochs: 10
+runtime:
+  device: cuda
+  log_interval: 200
+

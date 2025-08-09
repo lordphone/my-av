@@ -1,3 +1,20 @@
+## Configuration
+
+Training behavior is configured via YAML files in `configs/` with environment-specific overlays:
+
+- `configs/default.yaml`: shared defaults
+- `configs/local.yaml`: overrides for local runs
+- `configs/cloud.yaml`: overrides for Vertex AI
+
+Precedence: default.yaml < overlay (local/cloud) < environment variables < CLI flags.
+
+Examples:
+
+```
+python -m src.training.train --config local --dataset-path /path/to/data
+python -m src.training.train --config cloud --num-workers 8 --batch-size 64
+```
+
 # AV Model Training
 
 This project provides utilities for training an autonomous vehicle (AV) model. The recommended approach is to use the provided Docker environment so you do not need to install the deep learning stack locally.

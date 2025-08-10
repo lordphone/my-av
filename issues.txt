@@ -41,3 +41,5 @@ clipped and normalized steering and speed data.
 speed has a slow bias, might be due to speed and steering loss weights, o3 told me to try 1:3 steering:speed
 
 to balance speed and steering loss (weight), implemented a dwa - dynamic weight averaging technique from a paper
+
+needed to simplify environments to keep it portable

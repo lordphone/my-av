@@ -24,11 +24,12 @@ Precedence: `default.yaml` < profile (`local`/`cloud` or custom YAML) < environm
 - Cloud (Vertex AI UI with your Artifact Registry image):
   - Set the container image built from this repo.
   - Enable Cloud Storage FUSE for your bucket so it is mounted inside the container at `/gcs/<bucket>/...`.
-  - In Job Args, pass training flags, e.g.: `--config cloud --dataset-path /gcs/your-bucket/data --epochs 50 --batch-size 32 --num-workers 4`.
+  - In Job Args, pass training flags, e.g.: `--config cloud --dataset-path gs://your-bucket/data --epochs 50 --batch-size 32 --num-workers 4`.
+  - Note: The code uses standard file operations, so either enable Cloud Storage FUSE or modify the code to use `gcsfs` for direct `gs://` access.
 
 ### Common flags
 - `--config local|cloud|/path/to/config.yaml`
-- `--dataset-path PATH`
+- `--dataset-path PATH` (supports `gs://` with Cloud Storage FUSE enabled)
 - `--mode train|test` (default: `train`)
 - `--epochs N` (default: 50 for `train`, 10 for `test` if not specified)
 - `--batch-size N` (default: 20)

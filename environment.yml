@@ -13,7 +13,8 @@ dependencies:
   - matplotlib-base
   - pytest
   - pip:
-      - torch==2.6.0
-      - torchvision==0.21.0
-      - torchaudio==2.6.0
+      - torch==2.8.0+cu128
+      - torchvision==0.23.0+cu128
+      - torchaudio==2.8.0+cu128
       - typing-extensions==4.13.1
+      - --extra-index-url https://download.pytorch.org/whl/cu128

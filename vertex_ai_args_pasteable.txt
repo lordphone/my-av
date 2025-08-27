@@ -1,0 +1,14 @@
+--dataset-path
+/gcs/my-av/comma2k19
+--epochs
+50
+--batch-size
+32
+--num-workers
+4
+--checkpoint-dir
+/gcs/my-av/checkpoints
+--model-dir
+/gcs/my-av/models
+--log-dir
+/gcs/my-av/logs

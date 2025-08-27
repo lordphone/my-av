@@ -283,7 +283,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Analyze video segments in the dataset.')
-    parser.add_argument('--data-path', type=str, default="/home/lordphone/my-av/data/raw/comma2k19/",
+    parser.add_argument('--data-path', type=str, required=True,
                        help='Path to the dataset directory')
     parser.add_argument('--top-n', type=int, default=20,
                        help='Number of videos with fewest frames to display')

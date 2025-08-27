@@ -1,6 +1,8 @@
 # train.py
 # training script
 import os
+from pathlib import Path
+import yaml
 import logging
 import datetime
 import random
@@ -25,17 +27,67 @@ from src.data.video_window_dataset import VideoWindowIterableDataset
 from collections import OrderedDict
 import src.utils.data_utils as data_utils
 
-def setup_logging():
+def deep_update(base: dict, override: dict) -> dict:
+    """Recursively merge override into base (in-place) and return base."""
+    if not isinstance(base, dict) or not isinstance(override, dict):
+        return override
+    for key, value in (override or {}).items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_update(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+def load_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    with path.open("r") as f:
+        data = yaml.safe_load(f)
+        return data or {}
+
+def load_config(config_name_or_path: str) -> dict:
+    """Load base config and overlay with a named or file-based config."""
+    configs_dir = Path("configs")
+    base_cfg = load_yaml(configs_dir / "default.yaml")
+    overlay_path = Path(config_name_or_path)
+    if overlay_path.exists():
+        overlay_cfg = load_yaml(overlay_path)
+    else:
+        overlay_cfg = load_yaml(configs_dir / f"{config_name_or_path}.yaml")
+    return deep_update(base_cfg, overlay_cfg)
+
+def apply_env_overrides(cfg: dict) -> None:
+    """Apply selected environment variables into the config tree with basic casting."""
+    mapping = {
+        "AV_DATASET_PATH": (("data", "dataset_path"), str),
+        "AV_NUM_WORKERS": (("data", "num_workers"), int),
+        "AV_BATCH_SIZE": (("train", "batch_size"), int),
+        "AV_EPOCHS": (("train", "epochs"), int),
+        "AV_DEVICE": (("runtime", "device"), str),
+        "AV_LOG_INTERVAL": (("runtime", "log_interval"), int),
+    }
+    for env_key, (path_keys, caster) in mapping.items():
+        if env_key in os.environ:
+            node = cfg
+            for key in path_keys[:-1]:
+                node = node.setdefault(key, {})
+            raw_val = os.environ[env_key]
+            try:
+                node[path_keys[-1]] = caster(raw_val)
+            except Exception:
+                node[path_keys[-1]] = raw_val
+
+def setup_logging(log_dir="logs"):
     """Initialize logging configuration."""
     # Ensure logs directory exists
-    os.makedirs("logs", exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
     
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join("logs", f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
+            logging.FileHandler(os.path.join(log_dir, f"training_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")),
             logging.StreamHandler()
         ],
         force=True  # Override any existing handlers
@@ -153,14 +205,16 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     return steering_weight, speed_weight
 
 def train_model(
-    dataset_path, 
-    checkpoint_dir="checkpoints", # Directory to save checkpoints
-    resume_from=None, # Path to resume from checkpoint
+    dataset_path,
+    checkpoint_dir="checkpoints",  # Directory to save checkpoints
+    model_dir="models",  # Directory to save models
+    resume_from=None,  # Path to resume from checkpoint
     window_size=20,  # For 1s of driving data at 20fps
     target_length=1200,  # Length of each segment in frames
     stride=20,  # Non-overlapping windows
     batch_size=16, 
-    num_epochs=30, 
+    num_epochs=30,
+    num_workers=2,
     lr=0.0001,
     img_size=(240, 320),  # Image dimensions
     frame_delay=2,  # Frames for T-100ms lookback (2 for 100ms at 20fps)
@@ -178,7 +232,6 @@ def train_model(
         logging.info(f"Created checkpoint directory: {checkpoint_dir}")
 
     # Create model directory if it doesn't exist
-    model_dir = "models"  # Directory to save models
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
         logging.info(f"Created model directory: {model_dir}")
@@ -215,8 +268,8 @@ def train_model(
     if debug:
         logging.info(f"Train videos: {len(train_videos_indices)}, Val videos: {len(val_videos_indices)}")
 
-    # Number of workers to use for data loading
-    num_workers = 2  # Adjust based on your system's CPU cores
+    # Number of workers to use for data loading is controlled by the
+    # num_workers function argument so it can be tuned for the available hardware
     
     # Store normalization constants for inference
     normalization_mean = processed_dataset.preprocessor.transform.transforms[-1].mean
@@ -230,7 +283,7 @@ def train_model(
         train_dataset,
         batch_size=batch_size,  # Now works as expected
         num_workers=num_workers,
-        persistent_workers=True,
+        persistent_workers=num_workers > 0,
         pin_memory=True
     )
 
@@ -238,7 +291,7 @@ def train_model(
         val_dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        persistent_workers=True,
+        persistent_workers=num_workers > 0,
         pin_memory=True
     )
 
@@ -453,23 +506,22 @@ def train_model(
             
             # Set the start time for the next batch data loading
             next_data_loading_start_time = model_end_time
-
-            # Log detailed batch information
-            current_lr = optimizer.param_groups[0]['lr']
-            logging.info(
-                f"Epoch: {epoch+1:03d}/{num_epochs}, "
-                f"Batch: {i+1:05d}/{len(train_loader)}, "
-                f"Total Loss: {loss.item():.6f}, "
-                f"Steering Loss: {loss_steering.item():.6f}, "
-                f"Speed Loss: {loss_speed.item():.6f}, "
-                f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
-                f"LR: {current_lr:.8f}"
-            )
             
             running_loss += loss.item()
 
             # Log progress every 1000 batches
             if (i + 1) % log_interval == 0:
+                # Log detailed batch information
+                current_lr = optimizer.param_groups[0]['lr']
+                logging.info(
+                    f"Epoch: {epoch+1:03d}/{num_epochs}, "
+                    f"Batch: {i+1:05d}/{len(train_loader)}, "
+                    f"Total Loss: {loss.item():.6f}, "
+                    f"Steering Loss: {loss_steering.item():.6f}, "
+                    f"Speed Loss: {loss_speed.item():.6f}, "
+                    f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
+                    f"LR: {current_lr:.8f}"
+                )
                 batch_time = time.time()
                 batches_processed = i + 1
                 total_batches = len(train_loader)
@@ -549,17 +601,18 @@ def train_model(
                 val_steering_loss += loss_steering.item()
                 val_speed_loss += loss_speed.item()
 
-                # Log detailed batch information for validation
-                current_val_lr = optimizer.param_groups[0]['lr'] if hasattr(optimizer, 'param_groups') else None
-                logging.info(
-                    f"Validation - Epoch: {epoch+1:03d}/{num_epochs}, "
-                    f"Batch: {val_i+1:05d}/{len(val_loader)}, "
-                    f"Total Loss: {loss.item():.6f}, "
-                    f"Steering Loss: {loss_steering.item():.6f}, "
-                    f"Speed Loss: {loss_speed.item():.6f}, "
-                    f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
-                    f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
-                )
+                # Log detailed batch information for validation every 1000 batches
+                if (val_i + 1) % log_interval == 0:
+                    current_val_lr = optimizer.param_groups[0]['lr'] if hasattr(optimizer, 'param_groups') else None
+                    logging.info(
+                        f"Validation - Epoch: {epoch+1:03d}/{num_epochs}, "
+                        f"Batch: {val_i+1:05d}/{len(val_loader)}, "
+                        f"Total Loss: {loss.item():.6f}, "
+                        f"Steering Loss: {loss_steering.item():.6f}, "
+                        f"Speed Loss: {loss_speed.item():.6f}, "
+                        f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
+                        f"LR: {current_val_lr:.8f}" if current_val_lr is not None else ""
+                    )
 
         # Calculate average validation loss
         avg_val_loss = val_loss / len(val_loader)  # Mean across batches, no need to divide by batch_size again
@@ -639,20 +692,27 @@ def train_model(
 
 if __name__ == "__main__":
     # Initialize logging
-    logger = setup_logging()
-    
     import argparse
-    
+
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(description='Train the model in different modes')
     parser.add_argument('--mode', type=str, choices=['train', 'test'], default='train',
                         help='Training mode: "train" for real training, "test" for test training')
+    parser.add_argument('--config', type=str, default=None,
+                        help='Config profile name (e.g., local, cloud) or path to YAML file')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--epochs', type=int, help='Number of epochs to train (default: 30 for train, 5 for test)')
     parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
     parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
-    
+    parser.add_argument('--num-workers', type=int, default=2, help='Number of DataLoader worker processes')
+    parser.add_argument('--dataset-path', type=str, required=False, help='Path to dataset (overrides config)')
+    parser.add_argument('--checkpoint-dir', type=str, default='checkpoints', help='Directory to store checkpoints')
+    parser.add_argument('--model-dir', type=str, default='models', help='Directory to store trained models')
+    parser.add_argument('--log-dir', type=str, default='logs', help='Directory to store logs')
     args = parser.parse_args()
+
+    # Initialize logging using provided log directory
+    logger = setup_logging(args.log_dir)
     
     # Set default epochs based on mode if not specified
     if args.epochs is None:
@@ -661,37 +721,71 @@ if __name__ == "__main__":
         else:  # test mode
             args.epochs = 10
     
+    # Load and resolve configuration
+    resolved_cfg: dict = {}
+    if args.config:
+        try:
+            resolved_cfg = load_config(args.config)
+        except Exception as e:
+            logging.warning(f"Failed to load config '{args.config}': {e}")
+            resolved_cfg = {}
+    apply_env_overrides(resolved_cfg)
+
+    # Resolve effective parameters with precedence: CLI > env-applied config > defaults
+    def cfg_get(path, default=None):
+        node = resolved_cfg
+        for key in path:
+            if not isinstance(node, dict) or key not in node:
+                return default
+            node = node[key]
+        return node
+
+    effective_dataset_path = args.dataset_path or cfg_get(["data", "dataset_path"]) or None
+    effective_num_workers = args.num_workers if args.num_workers is not None else cfg_get(["data", "num_workers"], 2)
+    effective_batch_size = args.batch_size if args.batch_size is not None else cfg_get(["train", "batch_size"], 16)
+    effective_window_size = args.window_size if args.window_size is not None else cfg_get(["train", "window_size"], 20)
+    effective_epochs = args.epochs if args.epochs is not None else cfg_get(["train", "epochs"], 30)
+
     # Common parameters for both modes
     common_params = {
         'debug': args.debug,
-        'num_epochs': args.epochs,
-        'batch_size': args.batch_size,
-        'window_size': args.window_size
+        'num_epochs': effective_epochs,
+        'batch_size': effective_batch_size,
+        'window_size': effective_window_size,
+        'num_workers': effective_num_workers,
     }
-    
+
     if args.mode == 'train':
         # Real training mode - use full dataset
         logger.info(f"Starting real training mode with full dataset (epochs: {args.epochs})")
-        
+
+        if not effective_dataset_path:
+            raise SystemExit("Dataset path must be provided via --dataset-path or config data.dataset_path")
+
         # Check for existing checkpoint
-        checkpoint_dir = "checkpoints"
-        latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
+        latest_checkpoint_path = os.path.join(args.checkpoint_dir, 'latest_checkpoint.pth')
         resume_from = latest_checkpoint_path if os.path.exists(latest_checkpoint_path) else None
-        
+
         if resume_from:
             logger.info(f"Resuming training from checkpoint: {resume_from}")
         else:
             logger.info("No checkpoint found. Starting training from scratch.")
-        
+
         train_model(
-            dataset_path="/home/lordphone/my-av/data/raw/comma2k19",
+            dataset_path=effective_dataset_path,
+            checkpoint_dir=args.checkpoint_dir,
+            model_dir=args.model_dir,
             resume_from=resume_from,
             **common_params
         )
     else:
         # Test training mode - use test dataset
         logging.info(f"Starting test training mode with test dataset (epochs: {args.epochs})")
+        if not effective_dataset_path:
+            raise SystemExit("Dataset path must be provided via --dataset-path or config data.dataset_path")
         train_model(
-            dataset_path="/home/lordphone/my-av/tests/data",
+            dataset_path=effective_dataset_path,
+            checkpoint_dir=args.checkpoint_dir,
+            model_dir=args.model_dir,
             **common_params
         )

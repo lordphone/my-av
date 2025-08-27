@@ -1,6 +1,7 @@
 import unittest
 import time
 import os
+from pathlib import Path
 import torch
 
 from src.training.train import train_model
@@ -9,8 +10,8 @@ from src.data.comma2k19dataset import Comma2k19Dataset
 class TestTrainModel(unittest.TestCase):
 
     def setUp(self):
-        # Set up temporary dataset path and mock data
-        self.dataset_path = "/home/lordphone/my-av/tests/data"
+        # Set up dataset path relative to this file
+        self.dataset_path = Path(__file__).resolve().parents[1] / "data"
         os.makedirs(self.dataset_path, exist_ok=True)
 
     def test_train(self):
@@ -24,10 +25,13 @@ class TestTrainModel(unittest.TestCase):
             # Call train_model with all the explicit parameters
             model = train_model(
                 dataset_path=self.dataset_path,
+                checkpoint_dir="checkpoints",
+                model_dir="models",
                 window_size=20,  # For 1s of driving data at 20fps
                 target_length=1200,  # Length of each segment in frames
                 stride=20,  # Non-overlapping windows
                 batch_size=20,  # Batch size
+                num_workers=2,  # Use two workers for tests
                 num_epochs=5,  # Reduced for testing
                 lr=0.0001,  # Learning rate
                 img_size=(240, 320),  # Image dimensions
@@ -39,7 +43,7 @@ class TestTrainModel(unittest.TestCase):
             )
             
             self.assertIsNotNone(model, "Model should not be None after training.")
-            saved_model_path = 'models/best_model.pth'
+            saved_model_path = os.path.join('models', 'best_model.pth')
             self.assertTrue(os.path.exists(saved_model_path), "Best model file should be saved.")
             end_time = time.time()
             print(f"Training completed in {end_time - start_time:.2f} seconds.")

@@ -17,5 +17,9 @@ logs/*
 models/*
 outputs/*
 
+# Local-only config and env files
+.env*
+configs/local.yaml
+
 # Testing Data
 tests/data/Chunk_1/

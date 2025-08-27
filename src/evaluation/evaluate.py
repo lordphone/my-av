@@ -252,17 +252,13 @@ def create_visualization(frames, steering_preds, speed_preds, ground_truth, outp
     print(f"Visualization saved to {output_path}")
 
 if __name__ == "__main__":
-    # Path to your trained model
-    model_path = "/home/lordphone/my-av/models/best_model.pth"
+    import argparse
 
-    # Path to video (using raw string to handle special characters)
-    video_path = r"/home/lordphone/my-av/data/evaluation/Chunk_1/b0c9d2329ad1606b|2018-07-27--06-03-57/9/video.hevc"
-    
-    # Path to data
-    data_path = "/home/lordphone/my-av/data/evaluation/"
-    
-    # Path to save output video
-    output_path = "/home/lordphone/my-av/data/evaluation/prediction.mp4"
-    
-    # Process the video with predictions and ground truth
-    process_video_with_dataset(model_path, data_path, output_path, video_path)
+    parser = argparse.ArgumentParser(description="Evaluate a trained model and generate a visualization")
+    parser.add_argument("--model-path", type=str, required=True, help="Path to the trained model")
+    parser.add_argument("--data-path", type=str, required=True, help="Path to the evaluation dataset")
+    parser.add_argument("--video-path", type=str, required=True, help="Path to the input video")
+    parser.add_argument("--output-path", type=str, required=True, help="Where to save the visualization")
+    args = parser.parse_args()
+
+    process_video_with_dataset(args.model_path, args.data_path, args.output_path, args.video_path)

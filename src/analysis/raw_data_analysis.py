@@ -127,4 +127,10 @@ def analyze_dataset(dataset_path):
         print(f"{stat}: {value:.4f}")
     
 if __name__ == "__main__":
-    analyze_dataset("/home/lordphone/my-av/data/raw/comma2k19/")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Analyze steering and speed data")
+    parser.add_argument("--data-path", type=str, required=True, help="Path to the Comma2k19 dataset")
+    args = parser.parse_args()
+
+    analyze_dataset(args.data_path)

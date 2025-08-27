@@ -1,0 +1,15 @@
+FROM continuumio/miniconda3
+
+WORKDIR /app
+
+COPY environment.yml ./
+RUN conda env create -f environment.yml && conda clean -afy
+
+SHELL ["conda", "run", "-n", "ml", "/bin/bash", "-c"]
+
+COPY . .
+
+ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "ml", "python", "-m", "src.training.train"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python -c "import torch; print('healthy')" || exit 1

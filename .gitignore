@@ -2,7 +2,8 @@
 /venvs
 
 # data
-/data
+/data/*
+/data/**/
 
 # Python Related
 __pycache__/

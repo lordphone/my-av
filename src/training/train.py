@@ -221,6 +221,7 @@ def train_model(
     future_steps=5,  # Number of future steps to predict
     future_step_size=2,  # Frames between future predictions (2 = 100ms at 20fps)
     fps=20,  # Original video frames per second
+    log_interval=1000,  # Log interval for batch progress
     debug=False):  # Add debug flag
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -416,8 +417,7 @@ def train_model(
         else:
              logging.info("No checkpoint specified. Starting training from scratch.")
 
-    # Set log interval
-    log_interval = 1000  # Log every 1000 batches
+    # Log interval is now passed as a parameter from config
 
     # Training loop
     logging.info(f"Starting training for {num_epochs} epochs.")
@@ -511,17 +511,6 @@ def train_model(
 
             # Log progress every 1000 batches
             if (i + 1) % log_interval == 0:
-                # Log detailed batch information
-                current_lr = optimizer.param_groups[0]['lr']
-                logging.info(
-                    f"Epoch: {epoch+1:03d}/{num_epochs}, "
-                    f"Batch: {i+1:05d}/{len(train_loader)}, "
-                    f"Total Loss: {loss.item():.6f}, "
-                    f"Steering Loss: {loss_steering.item():.6f}, "
-                    f"Speed Loss: {loss_speed.item():.6f}, "
-                    f"Weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f}, "
-                    f"LR: {current_lr:.8f}"
-                )
                 batch_time = time.time()
                 batches_processed = i + 1
                 total_batches = len(train_loader)
@@ -702,9 +691,9 @@ if __name__ == "__main__":
                         help='Config profile name (e.g., local, cloud) or path to YAML file')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--epochs', type=int, help='Number of epochs to train (default: 30 for train, 5 for test)')
-    parser.add_argument('--batch-size', type=int, default=20, help='Batch size for training')
-    parser.add_argument('--window-size', type=int, default=20, help='Window size for temporal data')
-    parser.add_argument('--num-workers', type=int, default=2, help='Number of DataLoader worker processes')
+    parser.add_argument('--batch-size', type=int, default=None, help='Batch size for training')
+    parser.add_argument('--window-size', type=int, default=None, help='Window size for temporal data')
+    parser.add_argument('--num-workers', type=int, default=None, help='Number of DataLoader worker processes')
     parser.add_argument('--dataset-path', type=str, required=False, help='Path to dataset (overrides config)')
     parser.add_argument('--checkpoint-dir', type=str, default='checkpoints', help='Directory to store checkpoints')
     parser.add_argument('--model-dir', type=str, default='models', help='Directory to store trained models')
@@ -745,6 +734,7 @@ if __name__ == "__main__":
     effective_batch_size = args.batch_size if args.batch_size is not None else cfg_get(["train", "batch_size"], 16)
     effective_window_size = args.window_size if args.window_size is not None else cfg_get(["train", "window_size"], 20)
     effective_epochs = args.epochs if args.epochs is not None else cfg_get(["train", "epochs"], 30)
+    effective_log_interval = cfg_get(["runtime", "log_interval"], 1000)
 
     # Common parameters for both modes
     common_params = {
@@ -753,6 +743,7 @@ if __name__ == "__main__":
         'batch_size': effective_batch_size,
         'window_size': effective_window_size,
         'num_workers': effective_num_workers,
+        'log_interval': effective_log_interval,
     }
 
     if args.mode == 'train':

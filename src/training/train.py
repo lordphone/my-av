@@ -135,8 +135,10 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     avg_steering_loss = sum(epoch['steering_loss'] for epoch in recent_losses) / len(recent_losses)
     avg_speed_loss = sum(epoch['speed_loss'] for epoch in recent_losses) / len(recent_losses)
     
-    # Prevent division by zero
-    if avg_steering_loss == 0 or avg_speed_loss == 0:
+    # Prevent division by zero and numerical instability
+    epsilon = 1e-8  # Small threshold to prevent numerical issues
+    if avg_steering_loss < epsilon or avg_speed_loss < epsilon:
+        logging.warning(f"Very small loss detected - Steering: {avg_steering_loss:.2e}, Speed: {avg_speed_loss:.2e}. Using default weights to prevent numerical instability.")
         return starting_steering_weight, starting_speed_weight
     
     # Calculate weights directly proportional to loss magnitudes
@@ -285,7 +287,7 @@ def train_model(
         batch_size=batch_size,  # Now works as expected
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
-        pin_memory=True
+        pin_memory=False
     )
 
     val_loader = DataLoader(
@@ -293,7 +295,7 @@ def train_model(
         batch_size=batch_size,
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
-        pin_memory=True
+        pin_memory=False
     )
 
     """ Uncomment to check dataset sizes and batch shapes"""
@@ -662,9 +664,8 @@ def train_model(
                 'loss_history': loss_history,  # Save loss history in best model too
             }, best_model_path)
         
-        # Save the latest checkpoint including optimizer state etc.
-        latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
-        save_checkpoint({
+        # Save checkpoints - both epoch-specific and latest
+        checkpoint_state = {
             'epoch': epoch + 1,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
@@ -673,7 +674,15 @@ def train_model(
             'normalization_mean': normalization_mean,
             'normalization_std': normalization_std,
             'loss_history': loss_history,  # Save loss history for dynamic weight calculation
-        }, filename=latest_checkpoint_path)
+        }
+        
+        # Save epoch-specific checkpoint (so we can recover from any epoch)
+        epoch_checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_epoch_{epoch + 1:03d}.pth')
+        save_checkpoint(checkpoint_state, filename=epoch_checkpoint_path)
+        
+        # Save latest checkpoint for easy resuming
+        latest_checkpoint_path = os.path.join(checkpoint_dir, 'latest_checkpoint.pth')
+        save_checkpoint(checkpoint_state, filename=latest_checkpoint_path)
         # --- End of Checkpoint Saving ---
         
     logging.info("Training completed.")

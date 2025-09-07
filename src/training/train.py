@@ -135,11 +135,31 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     avg_steering_loss = sum(epoch['steering_loss'] for epoch in recent_losses) / len(recent_losses)
     avg_speed_loss = sum(epoch['speed_loss'] for epoch in recent_losses) / len(recent_losses)
     
-    # Prevent division by zero and numerical instability
-    epsilon = 1e-8  # Small threshold to prevent numerical issues
-    if avg_steering_loss < epsilon or avg_speed_loss < epsilon:
-        logging.warning(f"Very small loss detected - Steering: {avg_steering_loss:.2e}, Speed: {avg_speed_loss:.2e}. Using default weights to prevent numerical instability.")
+    # Check for NaN values in input losses
+    if not (torch.isfinite(torch.tensor(avg_steering_loss)) and torch.isfinite(torch.tensor(avg_speed_loss))):
+        logging.error(f"NaN or infinite loss detected in history - Steering: {avg_steering_loss}, Speed: {avg_speed_loss}. Using default weights.")
         return starting_steering_weight, starting_speed_weight
+    
+    # Handle cases where one component becomes very small
+    epsilon = 1e-8  # Small threshold to prevent numerical issues
+    focus_ratio = 10.0  # Focus ratio when one component is tiny (10:1)
+    
+    if avg_steering_loss < epsilon and avg_speed_loss < epsilon:
+        # Both losses are tiny - use default weights
+        logging.warning(f"Both losses very small - Steering: {avg_steering_loss:.2e}, Speed: {avg_speed_loss:.2e}. Using default weights.")
+        return starting_steering_weight, starting_speed_weight
+    elif avg_steering_loss < epsilon:
+        # Steering loss is tiny, focus heavily on speed
+        logging.info(f"Steering loss very small ({avg_steering_loss:.2e}), focusing on speed with {focus_ratio}:1 ratio.")
+        speed_weight = focus_ratio / (focus_ratio + 1) * TARGET_WEIGHT_SUM
+        steering_weight = 1 / (focus_ratio + 1) * TARGET_WEIGHT_SUM
+        return steering_weight, speed_weight
+    elif avg_speed_loss < epsilon:
+        # Speed loss is tiny, focus heavily on steering  
+        logging.info(f"Speed loss very small ({avg_speed_loss:.2e}), focusing on steering with {focus_ratio}:1 ratio.")
+        steering_weight = focus_ratio / (focus_ratio + 1) * TARGET_WEIGHT_SUM
+        speed_weight = 1 / (focus_ratio + 1) * TARGET_WEIGHT_SUM
+        return steering_weight, speed_weight
     
     # Calculate weights directly proportional to loss magnitudes
     # Higher loss gets higher weight to focus more on that component
@@ -201,6 +221,11 @@ def calculate_dynamic_weights(loss_history, starting_steering_weight, starting_s
     current_sum = steering_weight + speed_weight
     steering_weight = (steering_weight / current_sum) * TARGET_WEIGHT_SUM
     speed_weight = (speed_weight / current_sum) * TARGET_WEIGHT_SUM
+    
+    # Final safety check for NaN values in computed weights
+    if not (torch.isfinite(torch.tensor(steering_weight)) and torch.isfinite(torch.tensor(speed_weight))):
+        logging.error(f"NaN or infinite weights computed - Steering: {steering_weight}, Speed: {speed_weight}. Using default weights.")
+        return starting_steering_weight, starting_speed_weight
     
     logging.info(f"Dynamic weights: Steering: {steering_weight:.4f}, Speed: {speed_weight:.4f} (sum={steering_weight + speed_weight:.4f}) | Based on losses Steering: {avg_steering_loss:.5f}, Speed: {avg_speed_loss:.5f} | Importance bias Steering: {steering_importance:.1f}x, Speed: {speed_importance:.1f}x")
     
@@ -581,8 +606,38 @@ def train_model(
                     future_steering_targets = data['future_steering'].to(device)  # [batch_size, 5]
                     future_speed_targets = data['future_speed'].to(device)  # [batch_size, 5]
 
+                    # Check for NaN in predictions and targets
+                    if torch.isnan(steering_pred).any():
+                        logging.error(f"NaN detected in steering predictions at validation batch {val_i}")
+                        continue
+                    if torch.isnan(speed_pred).any():
+                        logging.error(f"NaN detected in speed predictions at validation batch {val_i}")
+                        continue
+                    if torch.isnan(future_steering_targets).any():
+                        logging.error(f"NaN detected in steering targets at validation batch {val_i}")
+                        continue
+                    if torch.isnan(future_speed_targets).any():
+                        logging.error(f"NaN detected in speed targets at validation batch {val_i}")
+                        continue
+
                     loss_steering = criterion_steering(steering_pred, future_steering_targets)
                     loss_speed = criterion_speed(speed_pred, future_speed_targets)
+                    
+                    # Check for NaN in individual losses
+                    if torch.isnan(loss_steering):
+                        logging.error(f"NaN detected in steering loss at validation batch {val_i}")
+                        continue
+                    if torch.isnan(loss_speed):
+                        logging.error(f"NaN detected in speed loss at validation batch {val_i}")
+                        continue
+                    
+                    # Check weights before using them
+                    if torch.isnan(torch.tensor(steering_weight)) or torch.isnan(torch.tensor(speed_weight)):
+                        logging.error(f"NaN detected in weights - Steering: {steering_weight}, Speed: {speed_weight}")
+                        # Use default weights as fallback
+                        steering_weight, speed_weight = 1.0, 0.5
+                        logging.info(f"Using fallback weights - Steering: {steering_weight}, Speed: {speed_weight}")
+                    
                     # Use dynamic weights
                     loss = steering_weight * loss_steering + speed_weight * loss_speed
 

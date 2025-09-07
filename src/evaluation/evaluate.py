@@ -11,7 +11,7 @@ from src.data.comma2k19dataset import Comma2k19Dataset
 from src.data.data_preprocessor import DataPreprocessor
 from src.utils.frame_reader import FrameReader
 
-def process_video_with_dataset(model_path, data_path, output_path, video_path):
+def process_video_with_dataset(model_path, data_path, output_path, segment_index=0):
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -54,8 +54,15 @@ def process_video_with_dataset(model_path, data_path, output_path, video_path):
     # Load the evaluation dataset
     base_dataset = Comma2k19Dataset(data_path)
     processor = DataPreprocessor()
-    processed_dataset = processor.preprocess_segment(base_dataset[0])
+    
+    print(f"Loading segment {segment_index} from dataset (total segments: {len(base_dataset)})")
+    segment = base_dataset[segment_index]
+    processed_dataset = processor.preprocess_segment(segment)
     frames, steering, speed = processed_dataset
+    
+    # Get video path from the segment
+    video_path = segment['video_path']
+    print(f"Using video from: {video_path}")
 
     target_length = 1150
     
@@ -256,9 +263,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Evaluate a trained model and generate a visualization")
     parser.add_argument("--model-path", type=str, required=True, help="Path to the trained model")
-    parser.add_argument("--data-path", type=str, required=True, help="Path to the evaluation dataset")
-    parser.add_argument("--video-path", type=str, required=True, help="Path to the input video")
+    parser.add_argument("--data-path", type=str, default="data/comma2k19", help="Path to the evaluation dataset (default: data/comma2k19)")
     parser.add_argument("--output-path", type=str, required=True, help="Where to save the visualization")
+    parser.add_argument("--index", type=int, default=0, help="Index of the segment to analyze from the dataset (default: 0)")
     args = parser.parse_args()
 
-    process_video_with_dataset(args.model_path, args.data_path, args.output_path, args.video_path)
+    process_video_with_dataset(args.model_path, args.data_path, args.output_path, args.index)

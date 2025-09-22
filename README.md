@@ -4,7 +4,7 @@ An autonomous vehicle prediction system that forecasts steering angles and vehic
 
 Finished training on 09/09/2025 (My Bday!), next steps are evaluation + simulation + intergration with openpilot.
 
-Issues I ran into and learnt from are in issues.txt.
+Issues I ran into and learnt from are in [issues.txt](issues.txt).
 
 ### Architecture & Implementation Stuff
 

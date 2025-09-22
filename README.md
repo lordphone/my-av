@@ -1,24 +1,24 @@
 ## Project Overview
 
 An autonomous vehicle prediction system that forecasts steering angles and vehicle speeds 100-500ms into the future from camera footage and current vehicle state.
-<div align="center">
-  <table>
-      <td align="center">
-        <h4>Steering on Highway</h4>
-        <a href="https://youtu.be/Gu2GAtuMQag">
-          <img src="https://img.youtube.com/vi/Gu2GAtuMQag/maxresdefault.jpg" width="400" alt="Steering on Highway">
-        </a>
-        <br>
-      </td>
-      <td align="center">
-        <h4>Works at Night, Can Stop Too!</h4>
-        <a href="https://youtu.be/pPa6Q-niG0c">
-          <img src="https://img.youtube.com/vi/pPa6Q-niG0c/maxresdefault.jpg" width="400" alt="Works at Night, Can Stop Too!">
-        </a>
-        <br>
-      </td>
-  </table>
-</div>
+### 📹 Demo Videos
+
+<table>
+<tr>
+<td width="50%">
+
+#### 🎬 Steering on Highway
+[![Steering on Highway](https://img.youtube.com/vi/Gu2GAtuMQag/0.jpg)](https://youtu.be/Gu2GAtuMQag)
+
+</td>
+<td width="50%">
+
+#### 🌙 Works at Night, Can Stop Too!
+[![Works at Night, Can Stop Too!](https://img.youtube.com/vi/pPa6Q-niG0c/0.jpg)](https://youtu.be/pPa6Q-niG0c)
+
+</td>
+</tr>
+</table>
 
 Finished training on 09/09/2025 (My Bday!), next steps are evaluation + simulation + intergration with openpilot.
 

@@ -1,8 +1,39 @@
 ## Project Overview
 
-An autonomous vehicle prediction system that forecasts near‑future steering angle and speed (T+100ms to T+500ms) from video and vehicle state. The model pairs a ResNet18 visual backbone with a GRU for temporal reasoning. It is trained on 20‑frame windows (1s at 20fps) built from 100ms‑separated frame pairs, and at inference it runs in a streaming manner with seq_len=1 by feeding successive frame‑pairs (current + T‑100ms) while carrying the GRU hidden state. The pipeline targets the Comma2k19 dataset with efficient windowing (non‑overlapping 20‑frame windows, 240×320 images) and worker‑friendly caching for high throughput. Optional visualization renders speed (mph), steering (degrees), and turn indicators, with HEVC video support.
+An autonomous vehicle prediction system that forecasts steering angles and vehicle speeds 100-500ms into the future from camera footage and current vehicle state.
 
-## Training
+Finished training on 09/09/2025 (My Bday!), next steps are evaluation + simulation + intergration with openpilot.
+
+Issues I ran into and learnt from are in [issues.txt](issues.txt).
+
+### Architecture & Implementation Stuff
+
+- **CV Pipeline:** Modified ResNet18 with 6-channel input for frame pairs (current + past)
+- **Frame Pairing:** Stacked current+past (T-100ms) frame pairs as input for the GRU
+- **Temporal Modeling:** 2-layer GRU (256 hidden units) with persistent state for streaming inference  
+- **Multi-task Output:** Joint prediction of steering angles and vehicle speeds
+- **Data Pipeline:** Custom windowing system for efficient processing of 107.5GB Comma2k19 dataset (33 hrs of highway driving footage), smart shuffling too
+- **Dynamic Loss Weighting:** Adaptive balancing between steering and speed objectives during training
+- **Streaming Design:** GRU hidden states persist between predictions for real-time deployment
+- **Production Ready:** Complete checkpointing system with resumable training and model exports. Dockerized for training on the cloud too (GCP)
+
+### Training Results
+
+**Architecture:**
+- **CNN Backbone:** ResNet18 (pre-trained) with modified 6-channel input layer
+- **Temporal Model:** 2-layer GRU (256 hidden units) for sequential processing
+- **Input:** 20-frame sequences (1 second) with frame pairs T and T-100ms, with current steering and speed values
+- **Output:** 5 future predictions for steering angle and speed (T+100ms to T+500ms)
+
+**Training Metrics:**
+- **Total Epochs:** 50 (completed successfully)
+- **Best Model:** Epoch 48 with validation loss of **0.0014**
+- **Final Performance:**
+  - Training Loss: **0.0002** (Steering: 0.0001, Speed: 0.0001)
+  - Validation Loss: **0.0016** (Steering: 0.0011, Speed: 0.0000)
+- **Training Split:** ~20 epochs on GCP, ~30 epochs locally with my gaming PC (like 2 weeks of loud fans spinning at night)
+
+## Train it Yourself!
 
 One Python entrypoint for all environments: `python -m src.training.train`.
 
@@ -48,5 +79,3 @@ Precedence: `default.yaml` < profile (`local`/`cloud` or custom YAML) < environm
 - `AV_LOG_INTERVAL` → `runtime.log_interval`
 
 Outputs are written to `checkpoints/`, `models/`, and `logs/` by default.
-
-Note: The container entrypoint calls the Python module directly; the prior shell wrapper has been removed for a single, consistent workflow.

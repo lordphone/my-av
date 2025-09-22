@@ -33,7 +33,7 @@ Issues I ran into and learnt from are in issues.txt.
   - Validation Loss: **0.0016** (Steering: 0.0011, Speed: 0.0000)
 - **Training Split:** ~20 epochs on GCP, ~30 epochs locally with my gaming PC (like 2 weeks of loud fans spinning at night)
 
-## Training
+## Train it Yourself!
 
 One Python entrypoint for all environments: `python -m src.training.train`.
 
@@ -79,5 +79,3 @@ Precedence: `default.yaml` < profile (`local`/`cloud` or custom YAML) < environm
 - `AV_LOG_INTERVAL` → `runtime.log_interval`
 
 Outputs are written to `checkpoints/`, `models/`, and `logs/` by default.
-
-Note: The container entrypoint calls the Python module directly; the prior shell wrapper has been removed for a single, consistent workflow.

@@ -2,24 +2,27 @@
 
 An autonomous vehicle prediction system that forecasts steering angles and vehicle speeds 100-500ms into the future from camera footage and current vehicle state.
 
-### Architecture
-- **Computer Vision Pipeline:** Modified ResNet18 with 6-channel input for frame pairs (current + past)
+Finished training on 09/09/2025 (My Bday!), next steps are evaluation + simulation + intergration with openpilot.
+
+Issues I ran into and learnt from are in issues.txt.
+
+### Architecture & Implementation Stuff
+
+- **CV Pipeline:** Modified ResNet18 with 6-channel input for frame pairs (current + past)
+- **Frame Pairing:** Stacked current+past (T-100ms) frame pairs as input for the GRU
 - **Temporal Modeling:** 2-layer GRU (256 hidden units) with persistent state for streaming inference  
 - **Multi-task Output:** Joint prediction of steering angles and vehicle speeds
-- **Data Pipeline:** Custom windowing system for efficient processing of 33GB Comma2k19 dataset
-
-### Implementation Details
-- **Frame Pairing:** Stacked current+past (T-100ms) frame pairs.
+- **Data Pipeline:** Custom windowing system for efficient processing of 107.5GB Comma2k19 dataset (33 hrs of highway driving footage), smart shuffling too
 - **Dynamic Loss Weighting:** Adaptive balancing between steering and speed objectives during training
 - **Streaming Design:** GRU hidden states persist between predictions for real-time deployment
-- **Production Ready:** Complete checkpointing system with resumable training and model exports
+- **Production Ready:** Complete checkpointing system with resumable training and model exports. Dockerized for training on the cloud too (GCP)
 
-## Training Results
+### Training Results
 
 **Architecture:**
 - **CNN Backbone:** ResNet18 (pre-trained) with modified 6-channel input layer
 - **Temporal Model:** 2-layer GRU (256 hidden units) for sequential processing
-- **Input:** 20-frame sequences (1 second) with frame pairs at 100ms intervals
+- **Input:** 20-frame sequences (1 second) with frame pairs T and T-100ms, with current steering and speed values
 - **Output:** 5 future predictions for steering angle and speed (T+100ms to T+500ms)
 
 **Training Metrics:**
@@ -28,20 +31,7 @@ An autonomous vehicle prediction system that forecasts steering angles and vehic
 - **Final Performance:**
   - Training Loss: **0.0002** (Steering: 0.0001, Speed: 0.0001)
   - Validation Loss: **0.0016** (Steering: 0.0011, Speed: 0.0000)
-- **Dataset:** Comma2k19 autonomous driving dataset
-- **Training Time:** ~5.8 hours on CUDA GPU
-
-**Key Features:**
-- **Real-time capability:** Streaming inference with GRU hidden state persistence
-- **Multi-output prediction:** Simultaneous steering and speed forecasting
-- **Dynamic loss weighting:** Adaptive weighting based on task difficulty
-- **Production-ready:** Complete checkpointing with normalization constants
-
-**Model Files:**
-- `models/best_model.pth` - Best performing model (48.8 MB)
-- `checkpoints/checkpoint_epoch_050.pth` - Final training checkpoint (146.3 MB)
-
-The extremely low validation losses demonstrate the model's ability to accurately predict vehicle behavior for autonomous driving applications. This system is suitable for trajectory planning, collision avoidance, and driving assistance systems.
+- **Training Split:** ~20 epochs on GCP, ~30 epochs locally with my gaming PC (like 2 weeks of loud fans spinning at night)
 
 ## Training
 

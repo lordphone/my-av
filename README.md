@@ -6,12 +6,12 @@ An autonomous vehicle prediction system that forecasts steering angles and vehic
 <tr>
 <td width="50%">
 
-#### ▶️ Steering on Highway
+#### ▶️ Steering on Highway (youtube)
 [![Steering on Highway](https://img.youtube.com/vi/Gu2GAtuMQag/0.jpg)](https://youtu.be/Gu2GAtuMQag)
 </td>
 <td width="50%">
 
-#### ▶️ Works at Night, Can Stop Too!
+#### ▶️ Works at Night, Can Stop Too! (youtube too)
 [![Works at Night, Can Stop Too!](https://img.youtube.com/vi/pPa6Q-niG0c/0.jpg)](https://youtu.be/pPa6Q-niG0c)
 </td>
 </tr>

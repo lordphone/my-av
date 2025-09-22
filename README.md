@@ -3,7 +3,6 @@
 An autonomous vehicle prediction system that forecasts steering angles and vehicle speeds 100-500ms into the future from camera footage and current vehicle state.
 <div align="center">
   <table>
-    <tr>
       <td align="center">
         <h4>Steering on Highway</h4>
         <a href="https://youtu.be/Gu2GAtuMQag">
@@ -18,7 +17,6 @@ An autonomous vehicle prediction system that forecasts steering angles and vehic
         </a>
         <br>
       </td>
-    </tr>
   </table>
 </div>
 

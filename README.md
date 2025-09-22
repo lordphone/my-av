@@ -1,9 +1,6 @@
 ## Project Overview
 
 An autonomous vehicle prediction system that forecasts steering angles and vehicle speeds 100-500ms into the future from camera footage and current vehicle state.
-
-### Demo Videos
-
 <div align="center">
   <table>
     <tr>
@@ -13,7 +10,6 @@ An autonomous vehicle prediction system that forecasts steering angles and vehic
           <img src="https://img.youtube.com/vi/Gu2GAtuMQag/maxresdefault.jpg" width="400" alt="Steering on Highway">
         </a>
         <br>
-        <a href="https://youtu.be/Gu2GAtuMQag">🎥 Watch on YouTube</a>
       </td>
       <td align="center">
         <h4>Works at Night, Can Stop Too!</h4>
@@ -21,7 +17,6 @@ An autonomous vehicle prediction system that forecasts steering angles and vehic
           <img src="https://img.youtube.com/vi/pPa6Q-niG0c/maxresdefault.jpg" width="400" alt="Works at Night, Can Stop Too!">
         </a>
         <br>
-        <a href="https://youtu.be/pPa6Q-niG0c">🎥 Watch on YouTube</a>
       </td>
     </tr>
   </table>

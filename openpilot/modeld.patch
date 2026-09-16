@@ -1,0 +1,53 @@
+--- a/openpilot/selfdrive/modeld/modeld.py
++++ b/openpilot/selfdrive/modeld/modeld.py
+@@ -40,8 +40,10 @@
+ from openpilot.selfdrive.modeld.fill_model_msg import fill_model_msg, fill_driving_model_data, fill_pose_msg, PublishState
+ from openpilot.selfdrive.modeld.constants import ModelConstants, Plan
+ from openpilot.selfdrive.modeld.helpers import MODELS_DIR, chestnut_present, chestnut_compiled, modeld_pkl_path, load_oob, wait_for_chestnut
++from openpilot.selfdrive.modeld.myav_lateral import MyAvLateral
+ 
+ SEND_RAW_PRED = os.getenv('SEND_RAW_PRED')
++MYAV = os.getenv('MYAV') == '1'
+ 
+ LAT_SMOOTH_SECONDS = 0.0
+ LONG_SMOOTH_SECONDS = 0.3
+@@ -50,7 +52,8 @@
+ 
+ 
+ def get_action_from_model(model_output: dict[str, np.ndarray], prev_action: log.ModelDataV2.Action,
+-                          lat_action_t: float, long_action_t: float, v_ego: float) -> log.ModelDataV2.Action:
++                          lat_action_t: float, long_action_t: float, v_ego: float,
++                          lat_accel_override: float | None = None) -> log.ModelDataV2.Action:
+   if 'action' not in model_output:
+     plan = model_output['plan'][0]
+     desired_accel = get_accel_from_plan(plan[:,Plan.VELOCITY][:,0],
+@@ -65,6 +68,8 @@
+   else:
+     desired_accel = model_output['action'][0,1]
+     desired_curvature = model_output['action'][0,0] / (max(1.0, v_ego))**2
++  if lat_accel_override is not None:
++    desired_curvature = lat_accel_override / (max(1.0, v_ego))**2
+   stop = should_stop(v_ego, desired_accel)
+   desired_accel = smooth_value(desired_accel, prev_action.desiredAcceleration, LONG_SMOOTH_SECONDS)
+   if v_ego > MIN_LAT_CONTROL_SPEED:
+@@ -285,6 +290,7 @@
+   small_model = ModelState(vipc_client_main.width, vipc_client_main.height, False) if model is None or CHESTNUT else None
+   if model is None:
+     model = small_model
++  myav = MyAvLateral() if MYAV else None
+   params.put_bool("ChestnutLoading", False)
+   cloudlog.warning(f"models loaded in {time.monotonic() - st:.1f}s, modeld starting")
+ 
+@@ -427,7 +433,11 @@
+       drivingdata_send = messaging.new_message('drivingModelData')
+       posenet_send = messaging.new_message('cameraOdometry')
+ 
+-      action = get_action_from_model(model_output, prev_action, lat_action_t, long_action_t, v_ego)
++      # my-av model reuses the warped road frame; the chestnut warp has a different size so skip it there
++      myav_lat_accel = None
++      if myav is not None and not model.chestnut:
++        myav_lat_accel = myav.run(model.input_queues['new_img'], v_ego, lat_action_t)
++      action = get_action_from_model(model_output, prev_action, lat_action_t, long_action_t, v_ego, myav_lat_accel)
+       prev_action = action
+       fill_model_msg(modelv2_send, model_output, action,
+                      publish_state, meta_main.frame_id, meta_extra.frame_id, frame_id,

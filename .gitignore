@@ -24,3 +24,6 @@ configs/local.yaml
 
 # Testing Data
 tests/data/Chunk_1/
+
+# macOS
+.DS_Store

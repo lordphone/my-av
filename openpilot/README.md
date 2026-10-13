@@ -6,13 +6,13 @@ Written against openpilot `master` at `7ee974a`.
 
 1. Train and export:
    ```bash
-   python -m src.training.train_op --dataset /path/to/comma2k19
-   python -m scripts.export_onnx checkpoints/op_model.pth models/myav.onnx
+   python -m myav.train --dataset /path/to/comma2k19 --name first-run
+   python -m myav.export_onnx runs/first-run/best.pt myav.onnx
    ```
 2. In your openpilot fork:
    ```bash
    cp myav_lateral.py <openpilot>/openpilot/selfdrive/modeld/
-   cp models/myav.onnx <openpilot>/openpilot/selfdrive/modeld/models/
+   cp myav.onnx <openpilot>/openpilot/selfdrive/modeld/models/
    cd <openpilot> && git apply <my-av>/openpilot/modeld.patch
    ```
 3. Compile on the device (same flags as modeld's SConscript):

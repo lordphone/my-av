@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myav"
+version = "0.1.0"
+description = "CNN-GRU lateral model trained on comma2k19 for openpilot"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.7",          # the RTX 5090 needs a CUDA 12.8+ build, see README
+    "torchvision",
+    "numpy",
+    "opencv-python-headless",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+export = ["onnx"]
+dev = ["onnx", "pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["legacy", "openpilot"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["myav", "conftest"]

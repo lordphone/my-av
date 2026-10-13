@@ -1,29 +1,31 @@
 # virtual environments
 /venvs
+/.venv
 
 # data
-/data/*
-/data/**/
+/data/
 
-# Python Related
+# Python
 __pycache__/
 .pytest_cache/
+.ruff_cache/
+*.egg-info/
 
 # secrets
 .secrets
-
-# Training checkpoints, logs, and models
-checkpoints/*
-logs/*
-models/*
-outputs/*
-
-# Local-only config and env files
 .env*
-configs/local.yaml
 
-# Testing Data
-tests/data/Chunk_1/
+# training runs (configs, logs, checkpoints) and exported models
+/runs/
+*.onnx
+
+# legacy pipeline outputs and local config
+legacy/checkpoints/
+legacy/logs/
+legacy/models/
+legacy/outputs/
+legacy/configs/local.yaml
+legacy/tests/data/Chunk_1/
 
 # macOS
 .DS_Store

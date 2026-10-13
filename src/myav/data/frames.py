@@ -1,10 +1,12 @@
-# op_frames.py
-# Converts comma2k19 road camera video into openpilot's driving model input format.
-# Mirrors openpilot/common/transformations/model.py and tinygrad examples/openpilot/compile_warp.py
+"""
+Converts comma2k19 road camera video into openpilot's driving model input format.
+Mirrors openpilot/common/transformations/model.py and tinygrad examples/openpilot/compile_warp.py
+"""
 
 import subprocess
-import numpy as np
+
 import cv2
+import numpy as np
 
 # openpilot MEDMODEL input frame
 MODEL_W, MODEL_H = 512, 256
@@ -94,5 +96,6 @@ def read_warped_frames(video_path, M=None, width=EON_W, height=EON_H):
         if len(buf) < frame_size:
             break
         frames.append(warp_yuv_frame(np.frombuffer(buf, dtype=np.uint8), M, width, height))
-    proc.wait()
+    if proc.wait() != 0:
+        raise RuntimeError(f"ffmpeg failed to decode {video_path}")
     return np.stack(frames) if frames else np.zeros((0, 6, MODEL_H // 2, MODEL_W // 2), np.uint8)

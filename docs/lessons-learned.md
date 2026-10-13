@@ -1,0 +1,56 @@
+# Lessons learned
+
+Things I ran into while building the original steering/speed model (now in `legacy/`), in the order they happened.
+
+- during setting up carla - step make PythonAPI, cant find include header files in the venv:
+
+  ```bash
+  # Create the target directory
+  mkdir -p /home/lordphone/my-av/venvs/carla-venv/include/python3.10
+
+  # Link all files (but this won't handle subdirectories)
+  for file in /usr/include/python3.8/*; do
+      ln -s "$file" /home/lordphone/my-av/venvs/carla-venv/include/python3.8/
+  done
+  ```
+
+- comma2k19 has folder mismanagment
+
+- for old openpilot version in comma2k19, when setting up tools, there are dependency issues, need to downgrade dependencies and add them to a hold list.
+  HOWEVER, by doing this, other packages break? I'm not sure how to use openpilot tools from here. maybe skip it.
+
+- hevc videos aren't compatible with ffmpeg's seeking function. had to convert to mp4 files.
+
+- installing the right version for cuda/nvidia drivers is important. deb > local
+
+- super slow frame reading. probably a cuda or implementation problem.
+  implemented batch frame reading to combat this^
+
+- a rtx 4080 with 12gb vram still cant do much with a 3DCNN, right now 1 batch size, 5 frames at 320 * 160.
+
+- turns out my orignal approach is okay for computer simulation, but doesnt work for inference on a comma3x at all, so switching to 2 frame + 5 frame prediction.
+
+- shuffling videos and windows are a pain. tried custom sampler, custom batch sampler, what worked is converting my dataset into an iterable one, with custom shuffling.
+
+- train script improvements: mixed precision training, multiple workers, GRU memory detachment/zeroing.
+
+- steering loss outweighting speed by magnituted of hundreds. It seems like this is due to speed being easy to learn? we will see.
+
+- biggg issue. my videos arent being loaded properly! this whole time, every video is just loaded with the first 400 frames! Fixed by adding vsync='0' to frame reader ffmpeg
+
+- because a convolution sums across the channel axis, every activation coming out of that layer is now roughly 2× larger than the original network was trained to expect, so the network is receiving much larger inputs than it was trained on. this can cause issues with training stability and performance.
+
+- insane batch loss size during some batches. I think this is due to the padding and videos being of different lengths. Wrote a script to analyze the video lengths, and 1% of videos are less than 1070 frames (short from the standard 1200).
+  Might decide to not train on videos less than 1200 frames.
+
+- clipped and normalized steering and speed data.
+
+- speed has a slow bias, might be due to speed and steering loss weights, o3 told me to try 1:3 steering:speed
+
+- to balance speed and steering loss (weight), implemented a dwa - dynamic weight averaging technique from a paper
+
+- needed to simplify environments to keep it portable, docker friendly
+
+- when speed loss went to 0, gradients exploded. didn't see that coming
+
+- saving only the latest checkpoints isnt good because training can break in between.

@@ -1,6 +1,10 @@
-# op_model.py
-# Lateral model that consumes openpilot's warped YUV frames and predicts lateral acceleration.
-# Runs one frame per step at inference so it can be dropped into openpilot's modeld.
+"""
+CNN-GRU lateral model: openpilot's warped YUV frames in, lateral acceleration out.
+
+Each step the CNN encodes the (previous, current) frame pair, the GRU updates its memory, and the head
+predicts lateral acceleration. Training runs the same steps over a window of frames; on the car modeld
+calls step() once per frame and feeds the hidden state back in.
+"""
 
 import torch
 import torch.nn as nn
@@ -28,7 +32,7 @@ class GRUCell(nn.Module):
         return (1 - z) * n + z * h
 
 
-class OpModel(nn.Module):
+class LateralModel(nn.Module):
     def __init__(self, hidden_size=256, num_layers=2, pretrained=True):
         super().__init__()
         self.hidden_size = hidden_size
@@ -43,7 +47,8 @@ class OpModel(nn.Module):
         orig = self.backbone.conv1.weight.data
         self.backbone.conv1 = nn.Conv2d(IN_CHANNELS, 64, kernel_size=7, stride=2, padding=3, bias=False)
         with torch.no_grad():
-            self.backbone.conv1.weight.copy_(orig.mean(dim=1, keepdim=True).repeat(1, IN_CHANNELS, 1, 1) * 3 / IN_CHANNELS)
+            mean_rgb = orig.mean(dim=1, keepdim=True)
+            self.backbone.conv1.weight.copy_(mean_rgb.repeat(1, IN_CHANNELS, 1, 1) * 3 / IN_CHANNELS)
 
         self.cells = nn.ModuleList([
             GRUCell(512 + 2 if i == 0 else hidden_size, hidden_size) for i in range(num_layers)

@@ -1,14 +1,16 @@
-# export_onnx.py
-# Exports a trained OpModel to ONNX with the input/output layout openpilot's modeld expects.
-# State inputs X have a matching output next_X so modeld can feed them back each frame.
-#
-# usage: python -m scripts.export_onnx checkpoints/op_model.pth models/myav.onnx
+"""
+Exports a trained LateralModel to ONNX with the input/output layout openpilot's modeld expects.
+State inputs X have a matching output next_X so modeld can feed them back each frame.
+
+    python -m myav.export_onnx runs/first-run/best.pt myav.onnx
+"""
 
 import argparse
+
 import torch
 import torch.nn as nn
 
-from src.models.op_model import OpModel
+from myav.models.lateral import LateralModel
 
 
 class OpenpilotWrapper(nn.Module):
@@ -24,9 +26,13 @@ class OpenpilotWrapper(nn.Module):
 
 
 def export(checkpoint, out_path):
-    model = OpModel(pretrained=False)
     if checkpoint:
-        model.load_state_dict(torch.load(checkpoint, map_location="cpu")["model"])
+        ckpt = torch.load(checkpoint, map_location="cpu")
+        cfg = ckpt["config"]
+        model = LateralModel(cfg["hidden_size"], cfg["num_layers"], pretrained=False)
+        model.load_state_dict(ckpt["model"])
+    else:
+        model = LateralModel(pretrained=False)  # untrained, for checking the export itself
     wrapper = OpenpilotWrapper(model).eval()
 
     inputs = (
@@ -49,6 +55,6 @@ def export(checkpoint, out_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("checkpoint", nargs="?", default=None)
-    parser.add_argument("out", nargs="?", default="models/myav.onnx")
+    parser.add_argument("out", nargs="?", default="myav.onnx")
     args = parser.parse_args()
     export(args.checkpoint, args.out)
